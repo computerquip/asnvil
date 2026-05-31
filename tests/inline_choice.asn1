@@ -1,0 +1,14 @@
+-- Test ASN.1 file with inline CHOICE as SEQUENCE field
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+    -- Inline CHOICE with tagged alternatives for distinguishability
+    Person ::= SEQUENCE {
+        name IA5String,
+        age INTEGER,
+        contact CHOICE {
+            email [0] EXPLICIT IA5String,
+            phone [1] EXPLICIT IA5String
+        } OPTIONAL
+    }
+
+END;

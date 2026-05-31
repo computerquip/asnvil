@@ -1,0 +1,10 @@
+"""{{ doc_comment }}"""
+from __future__ import annotations
+from asn1c_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, BitString, ObjectIdentifier, AsnError, InvalidLengthError
+from dataclasses import dataclass, field
+from typing import Optional
+from enum import Enum, IntEnum
+from datetime import datetime
+
+
+{{ declarations }}

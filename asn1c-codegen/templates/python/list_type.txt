@@ -1,0 +1,286 @@
+class {{ name }}(list, AsnType):
+{% if !doc_comment.is_empty() %}
+    """{{ doc_comment }}"""
+{% endif %}
+    def __init__(self, items: list[{{ element_type }}] | None = None):
+        super().__init__(items or [])
+
+    def encode_ber(self) -> bytes:
+{% if ber.tag_number == 17 %}
+        _outer = BerEncoder()
+{% else %}
+        _outer = BerEncoder()
+{% endif %}
+        _content = bytearray()
+        for _item in self:
+{% for inner in ber.list_element_ber %}
+{% if inner.encoding == "constructed" || inner.encoding == "referenced" %}
+            _content.extend(_item.encode_der())
+{% else if inner.encoding == "integer" %}
+            _ie = BerEncoder()
+            _ie.write_integer(_item)
+            _ib = _ie.finish()
+            _ite = BerEncoder()
+            _ite.write_tag(TagClass.UNIVERSAL, 2, False)
+            _ite.write_length(len(_ib))
+            _ite.write_bytes(_ib)
+            _content.extend(_ite.finish())
+{% else if inner.encoding == "boolean" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 1, False)
+            _be.write_length(1)
+            _be.write_bytes(b'\xff' if _item else b'\x00')
+            _content.extend(_be.finish())
+{% else if inner.encoding == "bytes" %}
+            _be = BerEncoder()
+            _be.write_tlv(TagClass.UNIVERSAL, {{ inner.tag_number }}, _item)
+            _content.extend(_be.finish())
+{% else if inner.encoding == "bit_string" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 3, False)
+            _be.write_length(len(_item.data) + 1)
+            _be.write_bytes(bytes([_item.unused_bits]))
+            _be.write_bytes(_item.data)
+            _content.extend(_be.finish())
+{% else if inner.encoding == "oid" %}
+            _ob = _item.encode()
+            _oe = BerEncoder()
+            _oe.write_tag(TagClass.UNIVERSAL, 6, False)
+            _oe.write_length(len(_ob))
+            _oe.write_bytes(_ob)
+            _content.extend(_oe.finish())
+{% else if inner.encoding == "string" %}
+            _sb = _item.encode('{{ inner.string_encoding }}')
+            _se = BerEncoder()
+            _se.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _se.write_length(len(_sb))
+            _se.write_bytes(_sb)
+            _content.extend(_se.finish())
+{% else if inner.encoding == "list" %}
+            _content.extend(_item.encode_ber())
+{% else %}
+            if hasattr(_item, 'encode_ber'):
+                _content.extend(_item.encode_ber())
+{% endif %}
+{% else %}
+            if hasattr(_item, 'encode_ber'):
+                _content.extend(_item.encode_ber())
+{% endfor %}
+{% if ber.tag_number == 17 %}
+        _outer.write_tag(TagClass.UNIVERSAL, 17, True)
+{% else %}
+        _outer.write_tag(TagClass.UNIVERSAL, {{ ber.tag_number }}, True)
+{% endif %}
+        _outer.write_length(len(_content))
+        _outer.write_bytes(_content)
+        return _outer.finish()
+
+    @classmethod
+    def decode_ber(cls, data: bytes) -> "{{ name }}":
+        return cls.decode_der(data)
+
+    def encode_der(self) -> bytes:
+        return self.encode_ber()
+
+    @classmethod
+    def decode_der(cls, data: bytes) -> "{{ name }}":
+        decoder = DerDecoder(data)
+        _tag = decoder.read_tag()
+        _length = decoder.read_length()
+        _end = decoder._pos + _length
+        items: list[{{ element_type }}] = []
+        while decoder._pos < _end:
+{% for inner in ber.list_element_ber %}
+{% if inner.encoding == "constructed" || inner.encoding == "referenced" %}
+            _item_start = decoder._pos
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _ = decoder.read_bytes(_ll)
+            items.append({{ element_type }}.decode_der(decoder._data[_item_start:decoder._pos]))
+{% else if inner.encoding == "integer" %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            items.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            items.append(_lv[0] != 0)
+{% else if inner.encoding == "bytes" %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            items.append(decoder.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            from asn1c_runtime import BitString
+            items.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            _oid, _ = ObjectIdentifier.decode(_lv)
+            items.append(_oid)
+{% else if inner.encoding == "string" %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            items.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "list" %}
+            _item_start = decoder._pos
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _ = decoder.read_bytes(_ll)
+            items.append({{ element_type }}.decode_der(decoder._data[_item_start:decoder._pos]))
+{% else %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            items.append(_lv)
+{% endif %}
+{% else %}
+            _lt = decoder.read_tag()
+            _ll = decoder.read_length()
+            _lv = decoder.read_bytes(_ll)
+            items.append(_lv)
+{% endfor %}
+        return cls(items)
+
+    def encode_ber_indefinite(self) -> bytes:
+        _outer = BerEncoder()
+        _content = bytearray()
+        for _item in self:
+{% for inner in ber.list_element_ber %}
+{% if inner.encoding == "constructed" || inner.encoding == "referenced" %}
+            _content.extend(_item.encode_der())
+{% else if inner.encoding == "integer" %}
+            _ie = BerEncoder()
+            _ie.write_integer(_item)
+            _ib = _ie.finish()
+            _ite = BerEncoder()
+            _ite.write_tag(TagClass.UNIVERSAL, 2, False)
+            _ite.write_length(len(_ib))
+            _ite.write_bytes(_ib)
+            _content.extend(_ite.finish())
+{% else if inner.encoding == "boolean" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 1, False)
+            _be.write_length(1)
+            _be.write_bytes(b'\xff' if _item else b'\x00')
+            _content.extend(_be.finish())
+{% else if inner.encoding == "bytes" %}
+            _be = BerEncoder()
+            _be.write_tlv(TagClass.UNIVERSAL, {{ inner.tag_number }}, _item)
+            _content.extend(_be.finish())
+{% else if inner.encoding == "bit_string" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 3, False)
+            _be.write_length(len(_item.data) + 1)
+            _be.write_bytes(bytes([_item.unused_bits]))
+            _be.write_bytes(_item.data)
+            _content.extend(_be.finish())
+{% else if inner.encoding == "oid" %}
+            _ob = _item.encode()
+            _oe = BerEncoder()
+            _oe.write_tag(TagClass.UNIVERSAL, 6, False)
+            _oe.write_length(len(_ob))
+            _oe.write_bytes(_ob)
+            _content.extend(_oe.finish())
+{% else if inner.encoding == "string" %}
+            _sb = _item.encode('{{ inner.string_encoding }}')
+            _se = BerEncoder()
+            _se.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _se.write_length(len(_sb))
+            _se.write_bytes(_sb)
+            _content.extend(_se.finish())
+{% else if inner.encoding == "list" %}
+            _content.extend(_item.encode_ber())
+{% else %}
+            if hasattr(_item, 'encode_ber'):
+                _content.extend(_item.encode_ber())
+{% endif %}
+{% else %}
+            if hasattr(_item, 'encode_ber'):
+                _content.extend(_item.encode_ber())
+{% endfor %}
+{% if ber.tag_number == 17 %}
+        _outer.write_tag(TagClass.UNIVERSAL, 17, True)
+{% else %}
+        _outer.write_tag(TagClass.UNIVERSAL, {{ ber.tag_number }}, True)
+{% endif %}
+        _outer.write_length(0, indefinite=True)
+        _outer.write_bytes(_content)
+        _outer.write_eoc()
+        return _outer.finish()
+
+    @classmethod
+    def decode_ber_indefinite(cls, data: bytes) -> "{{ name }}":
+        decoder = BerDecoder(data)
+        _tag = decoder.read_tag()
+        _length = decoder.read_length()
+        if _length is None:
+            _content = decoder.read_constructed_indefinite()
+        else:
+            _content = decoder.read_bytes(_length)
+        items: list[{{ element_type }}] = []
+        _ld = BerDecoder(_content)
+        while not _ld.at_end():
+{% for inner in ber.list_element_ber %}
+{% if inner.encoding == "constructed" || inner.encoding == "referenced" %}
+            _item_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _ = _ld.read_bytes(_ll)
+            items.append({{ element_type }}.decode_der(_ld._data[_item_start:_ld._pos]))
+{% else if inner.encoding == "integer" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            items.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            items.append(_lv[0] != 0)
+{% else if inner.encoding == "bytes" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            items.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            from asn1c_runtime import BitString
+            items.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _oid, _ = ObjectIdentifier.decode(_lv)
+            items.append(_oid)
+{% else if inner.encoding == "string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            items.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "list" %}
+            _item_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _ = _ld.read_bytes(_ll)
+            items.append({{ element_type }}.decode_der(_ld._data[_item_start:_ld._pos]))
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            items.append(_lv)
+{% endif %}
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            items.append(_lv)
+{% endfor %}
+        return cls(items)

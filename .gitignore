@@ -1,0 +1,26 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Output/test artifacts (generated during test runs)
+/output/
+tests/output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

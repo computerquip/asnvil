@@ -1,0 +1,11 @@
+-- Test ANY DEFINED BY support
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+MessageType ::= ENUMERATED { text(0), integer(1), boolean(2) }
+
+Container ::= SEQUENCE {
+    msgType    MessageType,
+    msgValue   ANY DEFINED BY msgType
+}
+
+END;

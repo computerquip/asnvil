@@ -1,0 +1,13 @@
+[package]
+name = "asn1c-codegen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+asn1c-ir = { path = "../asn1c-ir" }
+thiserror.workspace = true
+miette.workspace = true
+askama = { version = "0.16", features = ["config"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+anyhow.workspace = true

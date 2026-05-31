@@ -1,0 +1,7 @@
+class {{ name }}({% if repr == "IntEnum" %}IntEnum{% else %}Enum{% endif %}):
+{% if !doc_comment.is_empty() %}
+    """{{ doc_comment }}"""
+{% endif %}
+{% for variant in variants %}
+    {{ variant.name }} = {% if variant.has_value %}{{ variant.value }}{% else %}{{ loop.index0 }}{% endif %}
+{% endfor %}

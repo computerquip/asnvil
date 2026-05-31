@@ -1,0 +1,2014 @@
+@dataclass
+class {{ name }}(AsnType):
+{% if !doc_comment.is_empty() %}
+    """{{ doc_comment }}"""
+{% endif %}
+{% for field in fields %}
+    {{ field.name }}: {{ field.ty }}{% if !field.default.is_empty() %} = {{ field.default|safe }}{% else if field.optional %} = None{% endif %}
+{% endfor %}
+{% set outer_tag = 16 %}
+{% for ann in annotations %}{% if ann == "set" %}{% set outer_tag = 17 %}{% endif %}{% endfor %}
+
+    def encode_ber(self) -> bytes:
+        content = bytearray()
+{% for field in fields %}
+{% if field.has_ber %}
+{% if field.optional || !field.default.is_empty() %}
+{% if !field.default.is_empty() %}
+        if self.{{ field.name }} is not None and self.{{ field.name }} != {{ field.default }}:
+{% else %}
+        if self.{{ field.name }} is not None:
+{% endif %}
+{% if field.ber.encoding == "integer" %}
+            _iv = BerEncoder()
+            _iv.write_integer(self.{{ field.name }})
+            _ib = _iv.finish()
+            _ie = BerEncoder()
+            _ie.write_tag(TagClass.UNIVERSAL, 2, False)
+            _ie.write_length(len(_ib))
+            _ie.write_bytes(_ib)
+            content.extend(_ie.finish())
+{% else if field.ber.encoding == "enumerated" %}
+            _iv = BerEncoder()
+            _iv.write_integer(self.{{ field.name }}.value if hasattr(self.{{ field.name }}, 'value') else self.{{ field.name }})
+            _ib = _iv.finish()
+            _ie = BerEncoder()
+            _ie.write_tag(TagClass.UNIVERSAL, 10, False)
+            _ie.write_length(len(_ib))
+            _ie.write_bytes(_ib)
+            content.extend(_ie.finish())
+{% else if field.ber.encoding == "boolean" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 1, False)
+            _be.write_length(1)
+            _be.write_bytes(b'\xff' if self.{{ field.name }} else b'\x00')
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "string" %}
+            _se = BerEncoder()
+            _sb = self.{{ field.name }}.encode('{{ field.ber.string_encoding }}')
+            _se.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _se.write_length(len(_sb))
+            _se.write_bytes(_sb)
+            content.extend(_se.finish())
+{% else if field.ber.encoding == "bytes" %}
+            _be = BerEncoder()
+            _be.write_tlv(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, self.{{ field.name }})
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "bit_string" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 3, False)
+            _be.write_length(len(self.{{ field.name }}.data) + 1)
+            _be.write_bytes(bytes([self.{{ field.name }}.unused_bits]))
+            _be.write_bytes(self.{{ field.name }}.data)
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "oid" %}
+            _oe = BerEncoder()
+            _ob = self.{{ field.name }}.encode()
+            _oe.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _oe.write_length(len(_ob))
+            _oe.write_bytes(_ob)
+            content.extend(_oe.finish())
+{% else if field.ber.encoding == "null" %}
+            _ne = BerEncoder()
+            _ne.write_tag(TagClass.UNIVERSAL, 5, False)
+            _ne.write_length(0)
+            content.extend(_ne.finish())
+{% else if field.ber.encoding == "real" %}
+            import struct
+            _re = BerEncoder()
+            _rb = struct.pack('>d', self.{{ field.name }})
+            _re.write_tag(TagClass.UNIVERSAL, 9, False)
+            _re.write_length(len(_rb))
+            _re.write_bytes(_rb)
+            content.extend(_re.finish())
+{% else if field.ber.encoding == "time" %}
+            _te = BerEncoder()
+            _tb = self.{{ field.name }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+            _te.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _te.write_length(len(_tb))
+            _te.write_bytes(_tb)
+            content.extend(_te.finish())
+{% else if field.ber.encoding == "any" %}
+            content.extend(self.{{ field.name }})
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+            content.extend(self.{{ field.name }}.encode_ber())
+{% else if field.ber.encoding == "list" %}
+            _le = BerEncoder()
+            _lc = bytearray()
+            for _li in self.{{ field.name }}:
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+                _li_v = BerEncoder()
+                _li_v.write_integer(_li)
+                _li_inner = _li_v.finish()
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 2, False)
+                _li_e.write_length(len(_li_inner))
+                _li_e.write_bytes(_li_inner)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "enumerated" %}
+                _li_v = BerEncoder()
+                _li_v.write_integer(_li.value if hasattr(_li, 'value') else _li)
+                _li_inner = _li_v.finish()
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 10, False)
+                _li_e.write_length(len(_li_inner))
+                _li_e.write_bytes(_li_inner)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "boolean" %}
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 1, False)
+                _li_e.write_length(1)
+                _li_e.write_bytes(b'\xff' if _li else b'\x00')
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "string" %}
+                _li_b = _li.encode('{{ inner.string_encoding }}')
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bytes" %}
+                _li_e = BerEncoder()
+                _li_e.write_tlv(TagClass.UNIVERSAL, 4, _li)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bit_string" %}
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 3, False)
+                _li_e.write_length(len(_li.data) + 1)
+                _li_e.write_bytes(bytes([_li.unused_bits]))
+                _li_e.write_bytes(_li.data)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "oid" %}
+                _li_b = _li.encode()
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 6, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "null" %}
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 5, False)
+                _li_e.write_length(0)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "real" %}
+                import struct
+                _li_b = struct.pack('>d', _li)
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 9, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "time" %}
+                _li_b = _li.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+                _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "choice" %}
+                _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "list" %}
+                _lc.extend(_li.encode_der())
+{% else %}
+                if hasattr(_li, 'encode_ber'):
+                    _lc.extend(_li.encode_ber())
+{% endif %}
+{% else %}
+                if hasattr(_li, 'encode_ber'):
+                    _lc.extend(_li.encode_ber())
+{% endfor %}
+            _le.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, True)
+            _le.write_length(len(_lc))
+            _le.write_bytes(_lc)
+            content.extend(_le.finish())
+{% endif %}
+{% else %}
+{% if field.ber.encoding == "integer" %}
+        _iv = BerEncoder()
+        _iv.write_integer(self.{{ field.name }})
+        _ib = _iv.finish()
+        _ie = BerEncoder()
+        _ie.write_tag(TagClass.UNIVERSAL, 2, False)
+        _ie.write_length(len(_ib))
+        _ie.write_bytes(_ib)
+        content.extend(_ie.finish())
+{% else if field.ber.encoding == "enumerated" %}
+        _iv = BerEncoder()
+        _iv.write_integer(self.{{ field.name }}.value if hasattr(self.{{ field.name }}, 'value') else self.{{ field.name }})
+        _ib = _iv.finish()
+        _ie = BerEncoder()
+        _ie.write_tag(TagClass.UNIVERSAL, 10, False)
+        _ie.write_length(len(_ib))
+        _ie.write_bytes(_ib)
+        content.extend(_ie.finish())
+{% else if field.ber.encoding == "boolean" %}
+        _be = BerEncoder()
+        _be.write_tag(TagClass.UNIVERSAL, 1, False)
+        _be.write_length(1)
+        _be.write_bytes(b'\xff' if self.{{ field.name }} else b'\x00')
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "string" %}
+        _se = BerEncoder()
+        _sb = self.{{ field.name }}.encode('{{ field.ber.string_encoding }}')
+        _se.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _se.write_length(len(_sb))
+        _se.write_bytes(_sb)
+        content.extend(_se.finish())
+{% else if field.ber.encoding == "bytes" %}
+        _be = BerEncoder()
+        _be.write_tlv(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, self.{{ field.name }})
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "bit_string" %}
+        _be = BerEncoder()
+        _be.write_tag(TagClass.UNIVERSAL, 3, False)
+        _be.write_length(len(self.{{ field.name }}.data) + 1)
+        _be.write_bytes(bytes([self.{{ field.name }}.unused_bits]))
+        _be.write_bytes(self.{{ field.name }}.data)
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "oid" %}
+        _oe = BerEncoder()
+        _ob = self.{{ field.name }}.encode()
+        _oe.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _oe.write_length(len(_ob))
+        _oe.write_bytes(_ob)
+        content.extend(_oe.finish())
+{% else if field.ber.encoding == "null" %}
+        _ne = BerEncoder()
+        _ne.write_tag(TagClass.UNIVERSAL, 5, False)
+        _ne.write_length(0)
+        content.extend(_ne.finish())
+{% else if field.ber.encoding == "real" %}
+        import struct
+        _re = BerEncoder()
+        _rb = struct.pack('>d', self.{{ field.name }})
+        _re.write_tag(TagClass.UNIVERSAL, 9, False)
+        _re.write_length(len(_rb))
+        _re.write_bytes(_rb)
+        content.extend(_re.finish())
+{% else if field.ber.encoding == "time" %}
+        _te = BerEncoder()
+        _tb = self.{{ field.name }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+        _te.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _te.write_length(len(_tb))
+        _te.write_bytes(_tb)
+        content.extend(_te.finish())
+{% else if field.ber.encoding == "any" %}
+        content.extend(self.{{ field.name }})
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+        content.extend(self.{{ field.name }}.encode_ber())
+{% else if field.ber.encoding == "list" %}
+        _le = BerEncoder()
+        _lc = bytearray()
+        for _li in self.{{ field.name }}:
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+            _li_v = BerEncoder()
+            _li_v.write_integer(_li)
+            _li_inner = _li_v.finish()
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 2, False)
+            _li_e.write_length(len(_li_inner))
+            _li_e.write_bytes(_li_inner)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "enumerated" %}
+            _li_v = BerEncoder()
+            _li_v.write_integer(_li.value if hasattr(_li, 'value') else _li)
+            _li_inner = _li_v.finish()
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 10, False)
+            _li_e.write_length(len(_li_inner))
+            _li_e.write_bytes(_li_inner)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "boolean" %}
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 1, False)
+            _li_e.write_length(1)
+            _li_e.write_bytes(b'\xff' if _li else b'\x00')
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "string" %}
+            _li_b = _li.encode('{{ inner.string_encoding }}')
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bytes" %}
+            _li_e = BerEncoder()
+            _li_e.write_tlv(TagClass.UNIVERSAL, 4, _li)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bit_string" %}
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 3, False)
+            _li_e.write_length(len(_li.data) + 1)
+            _li_e.write_bytes(bytes([_li.unused_bits]))
+            _li_e.write_bytes(_li.data)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "oid" %}
+            _li_b = _li.encode()
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 6, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "null" %}
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 5, False)
+            _li_e.write_length(0)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "real" %}
+            import struct
+            _li_b = struct.pack('>d', _li)
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 9, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "time" %}
+            _li_b = _li.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+            _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "choice" %}
+            _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "list" %}
+            _lc.extend(_li.encode_der())
+{% else %}
+            if hasattr(_li, 'encode_ber'):
+                _lc.extend(_li.encode_ber())
+{% endif %}
+{% else %}
+            if hasattr(_li, 'encode_ber'):
+                _lc.extend(_li.encode_ber())
+{% endfor %}
+        _le.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, True)
+        _le.write_length(len(_lc))
+        _le.write_bytes(_lc)
+        content.extend(_le.finish())
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+        return bytes(content)
+
+    def encode_ber_indefinite(self) -> bytes:
+        content = bytearray()
+{% for field in fields %}
+{% if field.has_ber %}
+{% if field.optional || !field.default.is_empty() %}
+{% if !field.default.is_empty() %}
+        if self.{{ field.name }} is not None and self.{{ field.name }} != {{ field.default }}:
+{% else %}
+        if self.{{ field.name }} is not None:
+{% endif %}
+{% if field.ber.encoding == "integer" %}
+            _iv = BerEncoder()
+            _iv.write_integer(self.{{ field.name }})
+            _ib = _iv.finish()
+            _ie = BerEncoder()
+            _ie.write_tag(TagClass.UNIVERSAL, 2, False)
+            _ie.write_length(len(_ib))
+            _ie.write_bytes(_ib)
+            content.extend(_ie.finish())
+{% else if field.ber.encoding == "enumerated" %}
+            _iv = BerEncoder()
+            _iv.write_integer(self.{{ field.name }}.value if hasattr(self.{{ field.name }}, 'value') else self.{{ field.name }})
+            _ib = _iv.finish()
+            _ie = BerEncoder()
+            _ie.write_tag(TagClass.UNIVERSAL, 10, False)
+            _ie.write_length(len(_ib))
+            _ie.write_bytes(_ib)
+            content.extend(_ie.finish())
+{% else if field.ber.encoding == "boolean" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 1, False)
+            _be.write_length(1)
+            _be.write_bytes(b'\xff' if self.{{ field.name }} else b'\x00')
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "string" %}
+            _se = BerEncoder()
+            _sb = self.{{ field.name }}.encode('{{ field.ber.string_encoding }}')
+            _se.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _se.write_length(len(_sb))
+            _se.write_bytes(_sb)
+            content.extend(_se.finish())
+{% else if field.ber.encoding == "bytes" %}
+            _be = BerEncoder()
+            _be.write_tlv(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, self.{{ field.name }})
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "bit_string" %}
+            _be = BerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 3, False)
+            _be.write_length(len(self.{{ field.name }}.data) + 1)
+            _be.write_bytes(bytes([self.{{ field.name }}.unused_bits]))
+            _be.write_bytes(self.{{ field.name }}.data)
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "oid" %}
+            _oe = BerEncoder()
+            _ob = self.{{ field.name }}.encode()
+            _oe.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _oe.write_length(len(_ob))
+            _oe.write_bytes(_ob)
+            content.extend(_oe.finish())
+{% else if field.ber.encoding == "null" %}
+            _ne = BerEncoder()
+            _ne.write_tag(TagClass.UNIVERSAL, 5, False)
+            _ne.write_length(0)
+            content.extend(_ne.finish())
+{% else if field.ber.encoding == "real" %}
+            import struct
+            _re = BerEncoder()
+            _rb = struct.pack('>d', self.{{ field.name }})
+            _re.write_tag(TagClass.UNIVERSAL, 9, False)
+            _re.write_length(len(_rb))
+            _re.write_bytes(_rb)
+            content.extend(_re.finish())
+{% else if field.ber.encoding == "time" %}
+            _te = BerEncoder()
+            _tb = self.{{ field.name }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+            _te.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _te.write_length(len(_tb))
+            _te.write_bytes(_tb)
+            content.extend(_te.finish())
+{% else if field.ber.encoding == "any" %}
+            content.extend(self.{{ field.name }})
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+            content.extend(self.{{ field.name }}.encode_ber())
+{% else if field.ber.encoding == "list" %}
+            _le = BerEncoder()
+            _lc = bytearray()
+            for _li in self.{{ field.name }}:
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+                _li_v = BerEncoder()
+                _li_v.write_integer(_li)
+                _li_inner = _li_v.finish()
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 2, False)
+                _li_e.write_length(len(_li_inner))
+                _li_e.write_bytes(_li_inner)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "enumerated" %}
+                _li_v = BerEncoder()
+                _li_v.write_integer(_li.value if hasattr(_li, 'value') else _li)
+                _li_inner = _li_v.finish()
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 10, False)
+                _li_e.write_length(len(_li_inner))
+                _li_e.write_bytes(_li_inner)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "boolean" %}
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 1, False)
+                _li_e.write_length(1)
+                _li_e.write_bytes(b'\xff' if _li else b'\x00')
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "string" %}
+                _li_b = _li.encode('{{ inner.string_encoding }}')
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bytes" %}
+                _li_e = BerEncoder()
+                _li_e.write_tlv(TagClass.UNIVERSAL, 4, _li)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bit_string" %}
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 3, False)
+                _li_e.write_length(len(_li.data) + 1)
+                _li_e.write_bytes(bytes([_li.unused_bits]))
+                _li_e.write_bytes(_li.data)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "oid" %}
+                _li_b = _li.encode()
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 6, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "null" %}
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 5, False)
+                _li_e.write_length(0)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "real" %}
+                import struct
+                _li_b = struct.pack('>d', _li)
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 9, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "time" %}
+                _li_b = _li.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+                _li_e = BerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+                _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "choice" %}
+                _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "list" %}
+                _lc.extend(_li.encode_der())
+{% else %}
+                if hasattr(_li, 'encode_ber'):
+                    _lc.extend(_li.encode_ber())
+{% endif %}
+{% else %}
+                if hasattr(_li, 'encode_ber'):
+                    _lc.extend(_li.encode_ber())
+{% endfor %}
+            _le.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, True)
+            _le.write_length(len(_lc))
+            _le.write_bytes(_lc)
+            content.extend(_le.finish())
+{% endif %}
+{% else %}
+{% if field.ber.encoding == "integer" %}
+        _iv = BerEncoder()
+        _iv.write_integer(self.{{ field.name }})
+        _ib = _iv.finish()
+        _ie = BerEncoder()
+        _ie.write_tag(TagClass.UNIVERSAL, 2, False)
+        _ie.write_length(len(_ib))
+        _ie.write_bytes(_ib)
+        content.extend(_ie.finish())
+{% else if field.ber.encoding == "enumerated" %}
+        _iv = BerEncoder()
+        _iv.write_integer(self.{{ field.name }}.value if hasattr(self.{{ field.name }}, 'value') else self.{{ field.name }})
+        _ib = _iv.finish()
+        _ie = BerEncoder()
+        _ie.write_tag(TagClass.UNIVERSAL, 10, False)
+        _ie.write_length(len(_ib))
+        _ie.write_bytes(_ib)
+        content.extend(_ie.finish())
+{% else if field.ber.encoding == "boolean" %}
+        _be = BerEncoder()
+        _be.write_tag(TagClass.UNIVERSAL, 1, False)
+        _be.write_length(1)
+        _be.write_bytes(b'\xff' if self.{{ field.name }} else b'\x00')
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "string" %}
+        _se = BerEncoder()
+        _sb = self.{{ field.name }}.encode('{{ field.ber.string_encoding }}')
+        _se.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _se.write_length(len(_sb))
+        _se.write_bytes(_sb)
+        content.extend(_se.finish())
+{% else if field.ber.encoding == "bytes" %}
+        _be = BerEncoder()
+        _be.write_tlv(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, self.{{ field.name }})
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "bit_string" %}
+        _be = BerEncoder()
+        _be.write_tag(TagClass.UNIVERSAL, 3, False)
+        _be.write_length(len(self.{{ field.name }}.data) + 1)
+        _be.write_bytes(bytes([self.{{ field.name }}.unused_bits]))
+        _be.write_bytes(self.{{ field.name }}.data)
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "oid" %}
+        _oe = BerEncoder()
+        _ob = self.{{ field.name }}.encode()
+        _oe.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _oe.write_length(len(_ob))
+        _oe.write_bytes(_ob)
+        content.extend(_oe.finish())
+{% else if field.ber.encoding == "null" %}
+        _ne = BerEncoder()
+        _ne.write_tag(TagClass.UNIVERSAL, 5, False)
+        _ne.write_length(0)
+        content.extend(_ne.finish())
+{% else if field.ber.encoding == "real" %}
+        import struct
+        _re = BerEncoder()
+        _rb = struct.pack('>d', self.{{ field.name }})
+        _re.write_tag(TagClass.UNIVERSAL, 9, False)
+        _re.write_length(len(_rb))
+        _re.write_bytes(_rb)
+        content.extend(_re.finish())
+{% else if field.ber.encoding == "time" %}
+        _te = BerEncoder()
+        _tb = self.{{ field.name }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+        _te.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _te.write_length(len(_tb))
+        _te.write_bytes(_tb)
+        content.extend(_te.finish())
+{% else if field.ber.encoding == "any" %}
+        content.extend(self.{{ field.name }})
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+        content.extend(self.{{ field.name }}.encode_ber())
+{% else if field.ber.encoding == "list" %}
+        _le = BerEncoder()
+        _lc = bytearray()
+        for _li in self.{{ field.name }}:
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+            _li_v = BerEncoder()
+            _li_v.write_integer(_li)
+            _li_inner = _li_v.finish()
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 2, False)
+            _li_e.write_length(len(_li_inner))
+            _li_e.write_bytes(_li_inner)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "enumerated" %}
+            _li_v = BerEncoder()
+            _li_v.write_integer(_li.value if hasattr(_li, 'value') else _li)
+            _li_inner = _li_v.finish()
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 10, False)
+            _li_e.write_length(len(_li_inner))
+            _li_e.write_bytes(_li_inner)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "boolean" %}
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 1, False)
+            _li_e.write_length(1)
+            _li_e.write_bytes(b'\xff' if _li else b'\x00')
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "string" %}
+            _li_b = _li.encode('{{ inner.string_encoding }}')
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bytes" %}
+            _li_e = BerEncoder()
+            _li_e.write_tlv(TagClass.UNIVERSAL, 4, _li)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bit_string" %}
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 3, False)
+            _li_e.write_length(len(_li.data) + 1)
+            _li_e.write_bytes(bytes([_li.unused_bits]))
+            _li_e.write_bytes(_li.data)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "oid" %}
+            _li_b = _li.encode()
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 6, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "null" %}
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 5, False)
+            _li_e.write_length(0)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "real" %}
+            import struct
+            _li_b = struct.pack('>d', _li)
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 9, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "time" %}
+            _li_b = _li.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+            _li_e = BerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+            _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "choice" %}
+            _lc.extend(_li.encode_ber())
+{% else if inner.encoding == "list" %}
+            _lc.extend(_li.encode_der())
+{% else %}
+            if hasattr(_li, 'encode_ber'):
+                _lc.extend(_li.encode_ber())
+{% endif %}
+{% else %}
+            if hasattr(_li, 'encode_ber'):
+                _lc.extend(_li.encode_ber())
+{% endfor %}
+        _le.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, True)
+        _le.write_length(len(_lc))
+        _le.write_bytes(_lc)
+        content.extend(_le.finish())
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+        _outer = BerEncoder()
+        _outer.write_tag(TagClass.UNIVERSAL, {{ outer_tag }}, True)
+        _outer.write_length(0, indefinite=True)
+        _outer.write_bytes(content)
+        _outer.write_eoc()
+        return _outer.finish()
+
+    def encode_der(self) -> bytes:
+{% set outer_tag = 16 %}{% for ann in annotations %}{% if ann == "set" %}{% set outer_tag = 17 %}{% endif %}{% endfor %}
+        content = bytearray()
+{% for field in fields %}
+{% if field.has_ber %}
+{% if field.optional || !field.default.is_empty() %}
+{% if !field.default.is_empty() %}
+        if self.{{ field.name }} is not None and self.{{ field.name }} != {{ field.default }}:
+{% else %}
+        if self.{{ field.name }} is not None:
+{% endif %}
+{% if field.ber.encoding == "integer" %}
+            _iv = DerEncoder()
+            _iv.write_integer(self.{{ field.name }})
+            _ib = _iv.finish()
+            _ie = DerEncoder()
+            _ie.write_tag(TagClass.UNIVERSAL, 2, False)
+            _ie.write_length(len(_ib))
+            _ie.write_bytes(_ib)
+            content.extend(_ie.finish())
+{% else if field.ber.encoding == "enumerated" %}
+            _iv = DerEncoder()
+            _iv.write_integer(self.{{ field.name }}.value if hasattr(self.{{ field.name }}, 'value') else self.{{ field.name }})
+            _ib = _iv.finish()
+            _ie = DerEncoder()
+            _ie.write_tag(TagClass.UNIVERSAL, 10, False)
+            _ie.write_length(len(_ib))
+            _ie.write_bytes(_ib)
+            content.extend(_ie.finish())
+{% else if field.ber.encoding == "boolean" %}
+            _be = DerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 1, False)
+            _be.write_length(1)
+            _be.write_bytes(b'\xff' if self.{{ field.name }} else b'\x00')
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "string" %}
+            _se = DerEncoder()
+            _sb = self.{{ field.name }}.encode('{{ field.ber.string_encoding }}')
+            _se.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _se.write_length(len(_sb))
+            _se.write_bytes(_sb)
+            content.extend(_se.finish())
+{% else if field.ber.encoding == "bytes" %}
+            _be = DerEncoder()
+            _be.write_tlv_der(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, self.{{ field.name }})
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "bit_string" %}
+            _be = DerEncoder()
+            _be.write_tag(TagClass.UNIVERSAL, 3, False)
+            _be.write_length(len(self.{{ field.name }}.data) + 1)
+            _be.write_bytes(bytes([self.{{ field.name }}.unused_bits]))
+            _be.write_bytes(self.{{ field.name }}.data)
+            content.extend(_be.finish())
+{% else if field.ber.encoding == "oid" %}
+            _oe = DerEncoder()
+            _ob = self.{{ field.name }}.encode()
+            _oe.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _oe.write_length(len(_ob))
+            _oe.write_bytes(_ob)
+            content.extend(_oe.finish())
+{% else if field.ber.encoding == "null" %}
+            _ne = DerEncoder()
+            _ne.write_tag(TagClass.UNIVERSAL, 5, False)
+            _ne.write_length(0)
+            content.extend(_ne.finish())
+{% else if field.ber.encoding == "real" %}
+            import struct
+            _re = DerEncoder()
+            _rb = struct.pack('>d', self.{{ field.name }})
+            _re.write_tag(TagClass.UNIVERSAL, 9, False)
+            _re.write_length(len(_rb))
+            _re.write_bytes(_rb)
+            content.extend(_re.finish())
+{% else if field.ber.encoding == "time" %}
+            _te = BerEncoder()
+            _tb = self.{{ field.name }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+            _te.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+            _te.write_length(len(_tb))
+            _te.write_bytes(_tb)
+            content.extend(_te.finish())
+{% else if field.ber.encoding == "any" %}
+            content.extend(self.{{ field.name }})
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+            content.extend(self.{{ field.name }}.encode_der())
+{% else if field.ber.encoding == "list" %}
+            _le = DerEncoder()
+            _lc = bytearray()
+            for _li in self.{{ field.name }}:
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+                _li_v = DerEncoder()
+                _li_v.write_integer(_li)
+                _li_inner = _li_v.finish()
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 2, False)
+                _li_e.write_length(len(_li_inner))
+                _li_e.write_bytes(_li_inner)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "enumerated" %}
+                _li_v = DerEncoder()
+                _li_v.write_integer(_li.value if hasattr(_li, 'value') else _li)
+                _li_inner = _li_v.finish()
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 10, False)
+                _li_e.write_length(len(_li_inner))
+                _li_e.write_bytes(_li_inner)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "boolean" %}
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 1, False)
+                _li_e.write_length(1)
+                _li_e.write_bytes(b'\xff' if _li else b'\x00')
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "string" %}
+                _li_b = _li.encode('{{ inner.string_encoding }}')
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bytes" %}
+                _li_e = DerEncoder()
+                _li_e.write_tlv_der(TagClass.UNIVERSAL, 4, _li)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bit_string" %}
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 3, False)
+                _li_e.write_length(len(_li.data) + 1)
+                _li_e.write_bytes(bytes([_li.unused_bits]))
+                _li_e.write_bytes(_li.data)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "oid" %}
+                _li_b = _li.encode()
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 6, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "null" %}
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 5, False)
+                _li_e.write_length(0)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "real" %}
+                import struct
+                _li_b = struct.pack('>d', _li)
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, 9, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "time" %}
+                _li_b = _li.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+                _li_e = DerEncoder()
+                _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+                _li_e.write_length(len(_li_b))
+                _li_e.write_bytes(_li_b)
+                _lc.extend(_li_e.finish())
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+                _lc.extend(_li.encode_der())
+{% else if inner.encoding == "choice" %}
+                _lc.extend(_li.encode_der())
+{% else if inner.encoding == "list" %}
+                _lc.extend(_li.encode_der())
+{% else %}
+                if hasattr(_li, 'encode_der'):
+                    _lc.extend(_li.encode_der())
+{% endif %}
+{% else %}
+                if hasattr(_li, 'encode_der'):
+                    _lc.extend(_li.encode_der())
+{% endfor %}
+            _le.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, True)
+            _le.write_length(len(_lc))
+            _le.write_bytes(_lc)
+            content.extend(_le.finish())
+{% endif %}
+{% else %}
+{% if field.ber.encoding == "integer" %}
+        _iv = DerEncoder()
+        _iv.write_integer(self.{{ field.name }})
+        _ib = _iv.finish()
+        _ie = DerEncoder()
+        _ie.write_tag(TagClass.UNIVERSAL, 2, False)
+        _ie.write_length(len(_ib))
+        _ie.write_bytes(_ib)
+        content.extend(_ie.finish())
+{% else if field.ber.encoding == "enumerated" %}
+        _iv = DerEncoder()
+        _iv.write_integer(self.{{ field.name }}.value if hasattr(self.{{ field.name }}, 'value') else self.{{ field.name }})
+        _ib = _iv.finish()
+        _ie = DerEncoder()
+        _ie.write_tag(TagClass.UNIVERSAL, 10, False)
+        _ie.write_length(len(_ib))
+        _ie.write_bytes(_ib)
+        content.extend(_ie.finish())
+{% else if field.ber.encoding == "boolean" %}
+        _be = DerEncoder()
+        _be.write_tag(TagClass.UNIVERSAL, 1, False)
+        _be.write_length(1)
+        _be.write_bytes(b'\xff' if self.{{ field.name }} else b'\x00')
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "string" %}
+        _se = DerEncoder()
+        _sb = self.{{ field.name }}.encode('{{ field.ber.string_encoding }}')
+        _se.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _se.write_length(len(_sb))
+        _se.write_bytes(_sb)
+        content.extend(_se.finish())
+{% else if field.ber.encoding == "bytes" %}
+        _be = DerEncoder()
+        _be.write_tlv_der(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, self.{{ field.name }})
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "bit_string" %}
+        _be = DerEncoder()
+        _be.write_tag(TagClass.UNIVERSAL, 3, False)
+        _be.write_length(len(self.{{ field.name }}.data) + 1)
+        _be.write_bytes(bytes([self.{{ field.name }}.unused_bits]))
+        _be.write_bytes(self.{{ field.name }}.data)
+        content.extend(_be.finish())
+{% else if field.ber.encoding == "oid" %}
+        _oe = DerEncoder()
+        _ob = self.{{ field.name }}.encode()
+        _oe.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _oe.write_length(len(_ob))
+        _oe.write_bytes(_ob)
+        content.extend(_oe.finish())
+{% else if field.ber.encoding == "null" %}
+        _ne = DerEncoder()
+        _ne.write_tag(TagClass.UNIVERSAL, 5, False)
+        _ne.write_length(0)
+        content.extend(_ne.finish())
+{% else if field.ber.encoding == "real" %}
+        import struct
+        _re = DerEncoder()
+        _rb = struct.pack('>d', self.{{ field.name }})
+        _re.write_tag(TagClass.UNIVERSAL, 9, False)
+        _re.write_length(len(_rb))
+        _re.write_bytes(_rb)
+        content.extend(_re.finish())
+{% else if field.ber.encoding == "time" %}
+        _te = DerEncoder()
+        _tb = self.{{ field.name }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+        _te.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, False)
+        _te.write_length(len(_tb))
+        _te.write_bytes(_tb)
+        content.extend(_te.finish())
+{% else if field.ber.encoding == "any" %}
+        content.extend(self.{{ field.name }})
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+        content.extend(self.{{ field.name }}.encode_der())
+{% else if field.ber.encoding == "list" %}
+        _le = DerEncoder()
+        _lc = bytearray()
+        for _li in self.{{ field.name }}:
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+            _li_v = DerEncoder()
+            _li_v.write_integer(_li)
+            _li_inner = _li_v.finish()
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 2, False)
+            _li_e.write_length(len(_li_inner))
+            _li_e.write_bytes(_li_inner)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "enumerated" %}
+            _li_v = DerEncoder()
+            _li_v.write_integer(_li.value if hasattr(_li, 'value') else _li)
+            _li_inner = _li_v.finish()
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 10, False)
+            _li_e.write_length(len(_li_inner))
+            _li_e.write_bytes(_li_inner)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "boolean" %}
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 1, False)
+            _li_e.write_length(1)
+            _li_e.write_bytes(b'\xff' if _li else b'\x00')
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "string" %}
+            _li_b = _li.encode('{{ inner.string_encoding }}')
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bytes" %}
+            _li_e = DerEncoder()
+            _li_e.write_tlv_der(TagClass.UNIVERSAL, 4, _li)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "bit_string" %}
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 3, False)
+            _li_e.write_length(len(_li.data) + 1)
+            _li_e.write_bytes(bytes([_li.unused_bits]))
+            _li_e.write_bytes(_li.data)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "oid" %}
+            _li_b = _li.encode()
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 6, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "null" %}
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 5, False)
+            _li_e.write_length(0)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "real" %}
+            import struct
+            _li_b = struct.pack('>d', _li)
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, 9, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "time" %}
+            _li_b = _li.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+            _li_e = DerEncoder()
+            _li_e.write_tag(TagClass.UNIVERSAL, {{ inner.tag_number }}, False)
+            _li_e.write_length(len(_li_b))
+            _li_e.write_bytes(_li_b)
+            _lc.extend(_li_e.finish())
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+             _lc.extend(_li.encode_der())
+{% else if inner.encoding == "choice" %}
+             _lc.extend(_li.encode_der())
+{% else if inner.encoding == "list" %}
+             _lc.extend(_li.encode_der())
+{% else %}
+             if hasattr(_li, 'encode_der'):
+                 _lc.extend(_li.encode_der())
+{% endif %}
+{% else %}
+            if hasattr(_li, 'encode_der'):
+                _lc.extend(_li.encode_der())
+{% endfor %}
+        _le.write_tag(TagClass.UNIVERSAL, {{ field.ber.tag_number }}, True)
+        _le.write_length(len(_lc))
+        _le.write_bytes(_lc)
+        content.extend(_le.finish())
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+        _outer = DerEncoder()
+        _outer.write_tag(TagClass.UNIVERSAL, {{ outer_tag }}, True)
+        _outer.write_length(len(content))
+        _outer.write_bytes(content)
+        return _outer.finish()
+
+    @classmethod
+    def decode_der(cls, data: bytes) -> "{{ name }}":
+{% set is_set = false %}{% for ann in annotations %}{% if ann == "set" %}{% set is_set = true %}{% endif %}{% endfor %}
+{% if is_set %}
+        decoder = DerDecoder(data)
+        _tag = decoder.read_tag()
+        _length = decoder.read_length()
+        # Read and validate SET elements are in canonical order
+        _set_elements = decoder.read_set_elements(_tag[0], _tag[1], _length)
+        # Decode each element in sorted order
+        # Reconstruct the sorted content and decode normally
+        _sorted_content = DerDecoder.sort_set_tlv(_set_elements)
+        decoder2 = DerDecoder(_sorted_content)
+{% for field in fields %}
+{% if field.has_ber %}
+{% if field.optional %}
+{% if !field.default.is_empty() %}
+        _{{ field.name }} = {{ field.default|safe }}
+{% else %}
+        _{{ field.name }} = None
+{% endif %}
+        if decoder2._pos < len(_sorted_content):
+            _{{ field.name }}_save = decoder2._pos
+            _ft = decoder2.read_tag()
+{% if !field.ber.choice_alternative_tags.is_empty() %}
+            if ({% for alt in field.ber.choice_alternative_tags %}(_ft[0] == TagClass.{{ alt.tag_class }} and _ft[1] == {{ alt.tag_number }}{% if alt.constructed %} and _ft[2]{% else %} and not _ft[2]{% endif %}){% if !loop.last %} or {% endif %}{% endfor %}):
+{% else %}
+            if _ft[0] == TagClass.UNIVERSAL and _ft[1] == {{ field.ber.tag_number }} and not _ft[2]:
+{% endif %}
+                _fl = decoder2.read_length()
+                _fd = decoder2.read_bytes(_fl)
+{% if field.ber.encoding == "integer" %}
+                _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "enumerated" %}
+                _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "boolean" %}
+                _{{ field.name }} = _fd[0] != 0
+{% else if field.ber.encoding == "string" %}
+                _{{ field.name }} = _fd.decode('{{ field.ber.string_encoding }}')
+{% else if field.ber.encoding == "bytes" %}
+                _{{ field.name }} = _fd
+{% else if field.ber.encoding == "bit_string" %}
+                _{{ field.name }} = BitString(_fd[1:], _fd[0])
+{% else if field.ber.encoding == "oid" %}
+                _{{ field.name }}, _ = ObjectIdentifier.decode(_fd)
+{% else if field.ber.encoding == "null" %}
+                _{{ field.name }} = None
+{% else if field.ber.encoding == "real" %}
+                import struct
+                _{{ field.name }} = struct.unpack('>d', _fd)[0]
+{% else if field.ber.encoding == "time" %}
+                from datetime import datetime
+                _{{ field.name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')
+{% else if field.ber.encoding == "any" %}
+                _{{ field.name }}_re = BerEncoder()
+                _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+                _{{ field.name }}_re.write_length(_fl)
+                _{{ field.name }}_re.write_bytes(_fd)
+                _{{ field.name }} = _{{ field.name }}_re.finish()
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+                _{{ field.name }}_re = BerEncoder()
+                _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+                _{{ field.name }}_re.write_length(_fl)
+                _{{ field.name }}_re.write_bytes(_fd)
+                _{{ field.name }} = {{ field.ber.referenced_type }}.decode_der(_{{ field.name }}_re.finish())
+{% else if field.ber.encoding == "list" %}
+                _ld = DerDecoder(_fd)
+                _{{ field.name }} = []
+                while not _ld.at_end():
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "enumerated" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(_lv[0] != 0)
+{% else if inner.encoding == "string" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "bytes" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _li_oid, _ = ObjectIdentifier.decode(_lv)
+                    _{{ field.name }}.append(_li_oid)
+{% else if inner.encoding == "null" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(None)
+{% else if inner.encoding == "real" %}
+                    import struct
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(struct.unpack('>d', _lv)[0])
+{% else if inner.encoding == "time" %}
+                    from datetime import datetime
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else if inner.encoding == "choice" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else if inner.encoding == "list" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endif %}
+{% else %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endfor %}
+{% endif %}
+            else:
+                decoder2._pos = _{{ field.name }}_save
+{% if !field.default.is_empty() %}
+                _{{ field.name }} = {{ field.default }}
+{% endif %}
+{% else %}
+{% if field.ber.encoding == "integer" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "enumerated" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "boolean" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = _fd[0] != 0
+{% else if field.ber.encoding == "string" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = _fd.decode('{{ field.ber.string_encoding }}')
+{% else if field.ber.encoding == "bytes" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _{{ field.name }} = decoder2.read_bytes(_fl)
+{% else if field.ber.encoding == "bit_string" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = BitString(_fd[1:], _fd[0])
+{% else if field.ber.encoding == "oid" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }}, _ = ObjectIdentifier.decode(_fd)
+{% else if field.ber.encoding == "null" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        decoder2.read_bytes(_fl)
+        _{{ field.name }} = None
+{% else if field.ber.encoding == "real" %}
+        import struct
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = struct.unpack('>d', _fd)[0]
+{% else if field.ber.encoding == "time" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        from datetime import datetime
+        _{{ field.name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')
+{% else if field.ber.encoding == "any" %}
+        _{{ field.name }}_tag = decoder2.read_tag()
+        _{{ field.name }}_len = decoder2.read_length()
+        _{{ field.name }}_val = decoder2.read_bytes(_{{ field.name }}_len)
+        _{{ field.name }}_re = BerEncoder()
+        _{{ field.name }}_re.write_tag(_{{ field.name }}_tag[0], _{{ field.name }}_tag[1], _{{ field.name }}_tag[2])
+        _{{ field.name }}_re.write_length(_{{ field.name }}_len)
+        _{{ field.name }}_re.write_bytes(_{{ field.name }}_val)
+        _{{ field.name }} = _{{ field.name }}_re.finish()
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }}_re = BerEncoder()
+        _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+        _{{ field.name }}_re.write_length(_fl)
+        _{{ field.name }}_re.write_bytes(_fd)
+        _{{ field.name }} = {{ field.ber.referenced_type }}.decode_der(_{{ field.name }}_re.finish())
+{% else if field.ber.encoding == "list" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _ld = DerDecoder(_fd)
+        _{{ field.name }} = []
+        while not _ld.at_end():
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "enumerated" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(_lv[0] != 0)
+{% else if inner.encoding == "string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "bytes" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _li_oid, _ = ObjectIdentifier.decode(_lv)
+            _{{ field.name }}.append(_li_oid)
+{% else if inner.encoding == "null" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _ld.read_bytes(_ll)
+            _{{ field.name }}.append(None)
+{% else if inner.encoding == "real" %}
+            import struct
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(struct.unpack('>d', _lv)[0])
+{% else if inner.encoding == "time" %}
+            from datetime import datetime
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else if inner.encoding == "choice" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endif %}
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+        return cls(
+{% for field in fields %}
+            {{ field.name }}=_{{ field.name }}{% if !loop.last %},{% endif %}
+{% endfor %}
+        )
+{% else %}
+        decoder = DerDecoder(data)
+        _tag = decoder.read_tag()
+        _length = decoder.read_length()
+        _end = decoder._pos + _length
+{% for field in fields %}
+{% if field.has_ber %}
+{% if field.optional %}
+{% if !field.default.is_empty() %}
+        _{{ field.name }} = {{ field.default|safe }}
+{% else %}
+        _{{ field.name }} = None
+{% endif %}
+        if decoder._pos < _end:
+            _{{ field.name }}_save = decoder._pos
+            _ft = decoder.read_tag()
+{% if !field.ber.choice_alternative_tags.is_empty() %}
+            if ({% for alt in field.ber.choice_alternative_tags %}(_ft[0] == TagClass.{{ alt.tag_class }} and _ft[1] == {{ alt.tag_number }}{% if alt.constructed %} and _ft[2]{% else %} and not _ft[2]{% endif %}){% if !loop.last %} or {% endif %}{% endfor %}):
+{% else %}
+            if _ft[0] == TagClass.UNIVERSAL and _ft[1] == {{ field.ber.tag_number }} and not _ft[2]:
+{% endif %}
+                _fl = decoder.read_length()
+                _fd = decoder.read_bytes(_fl)
+{% if field.ber.encoding == "integer" %}
+                _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "enumerated" %}
+                _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "boolean" %}
+                _{{ field.name }} = _fd[0] != 0
+{% else if field.ber.encoding == "string" %}
+                _{{ field.name }} = _fd.decode('{{ field.ber.string_encoding }}')
+{% else if field.ber.encoding == "bytes" %}
+                _{{ field.name }} = _fd
+{% else if field.ber.encoding == "bit_string" %}
+                _{{ field.name }} = BitString(_fd[1:], _fd[0])
+{% else if field.ber.encoding == "oid" %}
+                _{{ field.name }}, _ = ObjectIdentifier.decode(_fd)
+{% else if field.ber.encoding == "null" %}
+                _{{ field.name }} = None
+{% else if field.ber.encoding == "real" %}
+                import struct
+                _{{ field.name }} = struct.unpack('>d', _fd)[0]
+{% else if field.ber.encoding == "time" %}
+                from datetime import datetime
+                _{{ field.name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')
+{% else if field.ber.encoding == "any" %}
+                _{{ field.name }}_re = BerEncoder()
+                _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+                _{{ field.name }}_re.write_length(_fl)
+                _{{ field.name }}_re.write_bytes(_fd)
+                _{{ field.name }} = _{{ field.name }}_re.finish()
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+                _{{ field.name }}_re = BerEncoder()
+                _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+                _{{ field.name }}_re.write_length(_fl)
+                _{{ field.name }}_re.write_bytes(_fd)
+                _{{ field.name }} = {{ field.ber.referenced_type }}.decode_der(_{{ field.name }}_re.finish())
+{% else if field.ber.encoding == "list" %}
+                _ld = DerDecoder(_fd)
+                _{{ field.name }} = []
+                while not _ld.at_end():
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "enumerated" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(_lv[0] != 0)
+{% else if inner.encoding == "string" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "bytes" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _li_oid, _ = ObjectIdentifier.decode(_lv)
+                    _{{ field.name }}.append(_li_oid)
+{% else if inner.encoding == "null" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(None)
+{% else if inner.encoding == "real" %}
+                    import struct
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(struct.unpack('>d', _lv)[0])
+{% else if inner.encoding == "time" %}
+                    from datetime import datetime
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else if inner.encoding == "choice" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else if inner.encoding == "list" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endif %}
+{% else %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endfor %}
+{% endif %}
+            else:
+                decoder._pos = _{{ field.name }}_save
+{% if !field.default.is_empty() %}
+                _{{ field.name }} = {{ field.default }}
+{% endif %}
+{% else %}
+{% if field.ber.encoding == "integer" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "enumerated" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "boolean" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }} = _fd[0] != 0
+{% else if field.ber.encoding == "string" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }} = _fd.decode('{{ field.ber.string_encoding }}')
+{% else if field.ber.encoding == "bytes" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _{{ field.name }} = decoder.read_bytes(_fl)
+{% else if field.ber.encoding == "bit_string" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }} = BitString(_fd[1:], _fd[0])
+{% else if field.ber.encoding == "oid" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }}, _ = ObjectIdentifier.decode(_fd)
+{% else if field.ber.encoding == "null" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        decoder.read_bytes(_fl)
+        _{{ field.name }} = None
+{% else if field.ber.encoding == "real" %}
+        import struct
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }} = struct.unpack('>d', _fd)[0]
+{% else if field.ber.encoding == "time" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        from datetime import datetime
+        _{{ field.name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')
+{% else if field.ber.encoding == "any" %}
+        _{{ field.name }}_tag = decoder.read_tag()
+        _{{ field.name }}_len = decoder.read_length()
+        _{{ field.name }}_val = decoder.read_bytes(_{{ field.name }}_len)
+        _{{ field.name }}_re = BerEncoder()
+        _{{ field.name }}_re.write_tag(_{{ field.name }}_tag[0], _{{ field.name }}_tag[1], _{{ field.name }}_tag[2])
+        _{{ field.name }}_re.write_length(_{{ field.name }}_len)
+        _{{ field.name }}_re.write_bytes(_{{ field.name }}_val)
+        _{{ field.name }} = _{{ field.name }}_re.finish()
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _{{ field.name }}_re = BerEncoder()
+        _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+        _{{ field.name }}_re.write_length(_fl)
+        _{{ field.name }}_re.write_bytes(_fd)
+        _{{ field.name }} = {{ field.ber.referenced_type }}.decode_der(_{{ field.name }}_re.finish())
+{% else if field.ber.encoding == "list" %}
+        _ft = decoder.read_tag()
+        _fl = decoder.read_length()
+        _fd = decoder.read_bytes(_fl)
+        _ld = DerDecoder(_fd)
+        _{{ field.name }} = []
+        while not _ld.at_end():
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "enumerated" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(_lv[0] != 0)
+{% else if inner.encoding == "string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "bytes" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _li_oid, _ = ObjectIdentifier.decode(_lv)
+            _{{ field.name }}.append(_li_oid)
+{% else if inner.encoding == "null" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _ld.read_bytes(_ll)
+            _{{ field.name }}.append(None)
+{% else if inner.encoding == "real" %}
+            import struct
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(struct.unpack('>d', _lv)[0])
+{% else if inner.encoding == "time" %}
+            from datetime import datetime
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else if inner.encoding == "choice" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else if inner.encoding == "list" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endif %}
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+        return cls(
+{% for field in fields %}
+            {{ field.name }}=_{{ field.name }}{% if !loop.last %},{% endif %}
+{% endfor %}
+        )
+
+    @classmethod
+    def decode_ber_indefinite(cls, data: bytes) -> "{{ name }}":
+        decoder = BerDecoder(data)
+        _tag = decoder.read_tag()
+        _length = decoder.read_length()
+        if _length is not None:
+            raise InvalidLengthError("Expected indefinite length")
+        _content = decoder.read_constructed_indefinite()
+        decoder2 = BerDecoder(_content)
+{% for field in fields %}
+{% if field.has_ber %}
+{% if field.optional %}
+{% if !field.default.is_empty() %}
+        _{{ field.name }} = {{ field.default|safe }}
+{% else %}
+        _{{ field.name }} = None
+{% endif %}
+        if not decoder2.at_end():
+            _{{ field.name }}_save = decoder2._pos
+            _ft = decoder2.read_tag()
+{% if !field.ber.choice_alternative_tags.is_empty() %}
+            if ({% for alt in field.ber.choice_alternative_tags %}(_ft[0] == TagClass.{{ alt.tag_class }} and _ft[1] == {{ alt.tag_number }}{% if alt.constructed %} and _ft[2]{% else %} and not _ft[2]{% endif %}){% if !loop.last %} or {% endif %}{% endfor %}):
+{% else %}
+            if _ft[0] == TagClass.UNIVERSAL and _ft[1] == {{ field.ber.tag_number }} and not _ft[2]:
+{% endif %}
+                _fl = decoder2.read_length()
+                _fd = decoder2.read_bytes(_fl)
+{% if field.ber.encoding == "integer" %}
+                _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "enumerated" %}
+                _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "boolean" %}
+                _{{ field.name }} = _fd[0] != 0
+{% else if field.ber.encoding == "string" %}
+                _{{ field.name }} = _fd.decode('{{ field.ber.string_encoding }}')
+{% else if field.ber.encoding == "bytes" %}
+                _{{ field.name }} = _fd
+{% else if field.ber.encoding == "bit_string" %}
+                _{{ field.name }} = BitString(_fd[1:], _fd[0])
+{% else if field.ber.encoding == "oid" %}
+                _{{ field.name }}, _ = ObjectIdentifier.decode(_fd)
+{% else if field.ber.encoding == "null" %}
+                _{{ field.name }} = None
+{% else if field.ber.encoding == "real" %}
+                import struct
+                _{{ field.name }} = struct.unpack('>d', _fd)[0]
+{% else if field.ber.encoding == "time" %}
+                from datetime import datetime
+                _{{ field.name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')
+{% else if field.ber.encoding == "any" %}
+                _{{ field.name }} = _fd
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+                _{{ field.name }}_re = BerEncoder()
+                _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+                _{{ field.name }}_re.write_length(_fl)
+                _{{ field.name }}_re.write_bytes(_fd)
+                _{{ field.name }} = {{ field.ber.referenced_type }}.decode_ber(_{{ field.name }}_re.finish())
+{% else if field.ber.encoding == "list" %}
+                _ld = BerDecoder(_fd)
+                _{{ field.name }} = []
+                while not _ld.at_end():
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "enumerated" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(_lv[0] != 0)
+{% else if inner.encoding == "string" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "bytes" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _li_oid, _ = ObjectIdentifier.decode(_lv)
+                    _{{ field.name }}.append(_li_oid)
+{% else if inner.encoding == "null" %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(None)
+{% else if inner.encoding == "real" %}
+                    import struct
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(struct.unpack('>d', _lv)[0])
+{% else if inner.encoding == "time" %}
+                    from datetime import datetime
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else if inner.encoding == "choice" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else if inner.encoding == "list" %}
+                    _{{ field.name }}_elem_start = _ld._pos
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _lv = _ld.read_bytes(_ll)
+                    _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_elem_start:_ld._pos]))
+{% else %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endif %}
+{% else %}
+                    _lt = _ld.read_tag()
+                    _ll = _ld.read_length()
+                    _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endfor %}
+{% endif %}
+            else:
+                decoder2._pos = _{{ field.name }}_save
+{% if !field.default.is_empty() %}
+                _{{ field.name }} = {{ field.default }}
+{% endif %}
+{% else %}
+{% if field.ber.encoding == "integer" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "enumerated" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = int.from_bytes(_fd, byteorder='big', signed=True)
+{% else if field.ber.encoding == "boolean" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = _fd[0] != 0
+{% else if field.ber.encoding == "string" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = _fd.decode('{{ field.ber.string_encoding }}')
+{% else if field.ber.encoding == "bytes" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _{{ field.name }} = decoder2.read_bytes(_fl)
+{% else if field.ber.encoding == "bit_string" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = BitString(_fd[1:], _fd[0])
+{% else if field.ber.encoding == "oid" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }}, _ = ObjectIdentifier.decode(_fd)
+{% else if field.ber.encoding == "null" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        decoder2.read_bytes(_fl)
+        _{{ field.name }} = None
+{% else if field.ber.encoding == "real" %}
+        import struct
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }} = struct.unpack('>d', _fd)[0]
+{% else if field.ber.encoding == "time" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        from datetime import datetime
+        _{{ field.name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')
+{% else if field.ber.encoding == "any" %}
+        _{{ field.name }}_tag = decoder2.read_tag()
+        _{{ field.name }}_len = decoder2.read_length()
+        _{{ field.name }}_val = decoder2.read_bytes(_{{ field.name }}_len)
+        _{{ field.name }}_re = BerEncoder()
+        _{{ field.name }}_re.write_tag(_{{ field.name }}_tag[0], _{{ field.name }}_tag[1], _{{ field.name }}_tag[2])
+        _{{ field.name }}_re.write_length(_{{ field.name }}_len)
+        _{{ field.name }}_re.write_bytes(_{{ field.name }}_val)
+        _{{ field.name }} = _{{ field.name }}_re.finish()
+{% else if field.ber.encoding == "referenced" || field.ber.encoding == "constructed" || field.ber.encoding == "choice" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _{{ field.name }}_re = BerEncoder()
+        _{{ field.name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+        _{{ field.name }}_re.write_length(_fl)
+        _{{ field.name }}_re.write_bytes(_fd)
+        _{{ field.name }} = {{ field.ber.referenced_type }}.decode_ber(_{{ field.name }}_re.finish())
+{% else if field.ber.encoding == "list" %}
+        _ft = decoder2.read_tag()
+        _fl = decoder2.read_length()
+        _fd = decoder2.read_bytes(_fl)
+        _ld = BerDecoder(_fd)
+        _{{ field.name }} = []
+        while not _ld.at_end():
+{% for inner in field.ber.list_element_ber %}
+{% if inner.encoding == "integer" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "enumerated" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(int.from_bytes(_lv, byteorder='big', signed=True))
+{% else if inner.encoding == "boolean" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(_lv[0] != 0)
+{% else if inner.encoding == "string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(_lv.decode('{{ inner.string_encoding }}'))
+{% else if inner.encoding == "bytes" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% else if inner.encoding == "bit_string" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(BitString(_lv[1:], _lv[0]))
+{% else if inner.encoding == "oid" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _li_oid, _ = ObjectIdentifier.decode(_lv)
+            _{{ field.name }}.append(_li_oid)
+{% else if inner.encoding == "null" %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _ld.read_bytes(_ll)
+            _{{ field.name }}.append(None)
+{% else if inner.encoding == "real" %}
+            import struct
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(struct.unpack('>d', _lv)[0])
+{% else if inner.encoding == "time" %}
+            from datetime import datetime
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))
+{% else if inner.encoding == "referenced" || inner.encoding == "constructed" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else if inner.encoding == "choice" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else if inner.encoding == "list" %}
+            _{{ field.name }}_start = _ld._pos
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _lv = _ld.read_bytes(_ll)
+            _{{ field.name }}.append({{ inner.referenced_type }}.decode_der(_ld._data[_{{ field.name }}_start:_ld._pos]))
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endif %}
+{% else %}
+            _lt = _ld.read_tag()
+            _ll = _ld.read_length()
+            _{{ field.name }}.append(_ld.read_bytes(_ll))
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+        return cls(
+{% for field in fields %}
+            {{ field.name }}=_{{ field.name }}{% if !loop.last %},{% endif %}
+{% endfor %}
+        )
+{% endif %}

@@ -1,0 +1,39 @@
+-- Test module for explicitly tagged CHOICE alternatives
+-- This tests disambiguation of same-tag types via explicit tagging
+
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+    Person ::= SEQUENCE {
+        name    UTF8String,
+        age     INTEGER,
+        active  BOOLEAN DEFAULT TRUE
+    }
+
+    Department ::= SEQUENCE {
+        deptName    UTF8String,
+        code        INTEGER,
+        location    UTF8String
+    }
+
+    -- CHOICE with explicitly tagged alternatives (both are SEQUENCE types)
+    Entity ::= CHOICE {
+        person      [0] EXPLICIT Person,
+        department  [1] EXPLICIT Department,
+        flag        [2] EXPLICIT BOOLEAN
+    }
+
+    -- Nested CHOICE with explicitly tagged alternatives
+    Container ::= SEQUENCE {
+        id      INTEGER,
+        entity  Entity
+    }
+
+    -- CHOICE with mixed: some explicit, some inherent
+    MixedChoice ::= CHOICE {
+        item        [0] EXPLICIT Person,
+        count       INTEGER,
+        label       UTF8String
+    }
+
+END
+;

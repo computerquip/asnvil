@@ -1,0 +1,79 @@
+-- Simplified X.509 Certificate Module
+-- Based on RFC 5912 PKIX1Explicit-2009
+-- Simplified to work within current compiler capabilities
+
+PKIX1Explicit DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+Version ::= INTEGER { v1(0), v2(1), v3(2) }
+
+CertificateSerialNumber ::= INTEGER
+
+AlgorithmIdentifier ::= SEQUENCE {
+    algorithm       OBJECT IDENTIFIER,
+    parameters      OCTET STRING OPTIONAL
+}
+
+Validity ::= SEQUENCE {
+    notBefore       UTCTime,
+    notAfter        UTCTime
+}
+
+SubjectPublicKeyInfo ::= SEQUENCE {
+    algorithm       AlgorithmIdentifier,
+    subjectPublicKey BIT STRING
+}
+
+AttributeValue ::= OCTET STRING
+
+AttributeTypeAndValue ::= SEQUENCE {
+    type            OBJECT IDENTIFIER,
+    value           AttributeValue
+}
+
+RelativeDistinguishedName ::= SET OF AttributeTypeAndValue
+
+RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+
+Name ::= SEQUENCE {
+    rdnSequence     RDNSequence
+}
+
+Extension ::= SEQUENCE {
+    extnID          OBJECT IDENTIFIER,
+    extnValue       OCTET STRING,
+    critical        BOOLEAN OPTIONAL
+}
+
+Extensions ::= SEQUENCE OF Extension
+
+TBSCertificate ::= SEQUENCE {
+    serialNumber            CertificateSerialNumber,
+    signature               AlgorithmIdentifier,
+    issuer                  Name,
+    validity                Validity,
+    subject                 Name,
+    subjectPublicKeyInfo    SubjectPublicKeyInfo,
+    version                 Version OPTIONAL
+}
+
+Certificate ::= SEQUENCE {
+    tbsCertificate      TBSCertificate,
+    signatureAlgorithm  AlgorithmIdentifier,
+    signatureValue      BIT STRING
+}
+
+CertificateList ::= SEQUENCE {
+    tbsCertList         TBSCertList,
+    signatureAlgorithm  AlgorithmIdentifier,
+    signature           BIT STRING
+}
+
+TBSCertList ::= SEQUENCE {
+    signature           AlgorithmIdentifier,
+    issuer              Name,
+    thisUpdate          UTCTime,
+    nextUpdate          UTCTime OPTIONAL,
+    version             Version OPTIONAL
+}
+
+END;

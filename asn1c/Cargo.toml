@@ -1,0 +1,18 @@
+[package]
+name = "asn1c"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "asn1c"
+path = "src/main.rs"
+
+[dependencies]
+asn1c-parser = { path = "../asn1c-parser" }
+asn1c-ir = { path = "../asn1c-ir" }
+asn1c-codegen = { path = "../asn1c-codegen" }
+
+clap.workspace = true
+anyhow.workspace = true
+miette.workspace = true
+num-bigint.workspace = true

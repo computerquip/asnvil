@@ -1,0 +1,173 @@
+%start Module
+%title "ASN.1 Grammar"
+%comment "Grammar for ASN.1 module definitions per ITU-T X.680-X.683 (2021)"
+%grammar_type 'll(k)'
+%line_comment '--'
+%block_comment '/*' '*/'
+%skip Whitespace
+
+%%
+
+Whitespace: /[ \t\r\n]+/ ;
+
+Identifier: /[a-z][a-zA-Z0-9-]*/ ;
+Reference: /[A-Z][a-zA-Z0-9-]*/ ;
+NumberLiteral: /[0-9]+/ ;
+BinaryString: /'[01]+'B/ ;
+HexString: /'[0-9A-Fa-f]+'H/ ;
+CharString: /"(\\.|[^"])*"/ ;
+
+Module: ModuleIdentifier 'DEFINITIONS'^ [TagDefault] [ExtensionDefault] '::='^ 'BEGIN'^ ModuleBody^ 'END'^ ';';
+
+ModuleIdentifier: Reference [DefinitiveIdentifier];
+
+DefinitiveIdentifier: '{' DefinitiveObjIdComponents '}';
+DefinitiveObjIdComponents: DefinitiveObjIdComponent {','^ DefinitiveObjIdComponent};
+DefinitiveObjIdComponent: Identifier | NumberLiteral;
+
+TagDefault: 'EXPLICIT'^ 'TAGS'^ | 'IMPLICIT'^ 'TAGS'^ | 'AUTOMATIC'^ 'TAGS'^;
+ExtensionDefault: 'EXTENSIBILITY'^ 'IMPLIED'^;
+
+ModuleBody: [Exports] [Imports] [AssignmentList];
+
+Exports: 'EXPORTS'^ ExportsContent^ ';';
+ExportsContent: 'ALL'^ | ExportList;
+ExportList: ExportSymbol {','^ ExportSymbol};
+ExportSymbol: IdentifierOrKeyword;
+
+Imports: 'IMPORTS'^ ImportList^ ';';
+ImportList: ImportItem {','^ ImportItem};
+ImportItem: SymbolsImported^ 'FROM'^ ModuleReference^ [DefinitiveIdentifier];
+SymbolsImported: ImportSymbol {','^ ImportSymbol};
+ImportSymbol: IdentifierOrKeyword;
+ModuleReference: Reference;
+
+AssignmentList: Assignment {Assignment};
+
+Assignment: TypeAssignment | ValueAssignment;
+
+TypeAssignment: Reference '::='^ Type;
+
+ValueAssignment: Reference Type '::='^ Value;
+
+Type:
+    BooleanType |
+    IntegerType |
+    RealType |
+    EnumeratedType |
+    BitStringType |
+    OctetStringType |
+    NullType |
+    SequenceType |
+    SetType |
+    ChoiceType |
+    SequenceOfType |
+    SetOfType |
+    TaggedType |
+    ObjectIdentifierType |
+    RelativeOidType |
+    RestrictedStringType |
+    UnrestrictedStringType |
+    GeneralizedTimeType |
+    UTCTimeType |
+    AnyType |
+    OpenType |
+    ReferencedType;
+
+BooleanType: 'BOOLEAN';
+IntegerType: 'INTEGER' [NamedNumberList];
+RealType: 'REAL';
+EnumeratedType: 'ENUMERATED' ['{'^ RootEnumeration ['...'^ ExtAdditions] '}'^];
+BitStringType: 'BIT'^ 'STRING' [NamedBitList];
+OctetStringType: 'OCTET'^ 'STRING';
+NullType: 'NULL';
+SequenceType: 'SEQUENCE' ['{'^ RootSequence ['...'^ ExtAddSequence] '}'^];
+SetType: 'SET' ['{'^ RootSet ['...'^ ExtAddSet] '}'^];
+ChoiceType: 'CHOICE' ['{'^ RootAlternatives ['...'^ ExtAddAlternatives] '}'^];
+SequenceOfType: 'SEQUENCE'^ 'OF'^ Type;
+SetOfType: 'SET'^ 'OF'^ Type;
+ObjectIdentifierType: 'OBJECT'^ 'IDENTIFIER';
+RelativeOidType: 'RELATIVE-OID';
+GeneralizedTimeType: 'GeneralizedTime';
+UTCTimeType: 'UTCTime';
+AnyType: 'ANY';
+OpenType: 'ANY'^ 'DEFINED'^ 'BY';
+
+RestrictedStringType:
+    'UTF8String' |
+    'NumericString' |
+    'PrintableString' |
+    'TeletexString' |
+    'T61String' |
+    'VideotexString' |
+    'IA5String' |
+    'GraphicString' |
+    'VisibleString' |
+    'ISO646String' |
+    'GeneralString' |
+    'UniversalString' |
+    'BMPString';
+
+UnrestrictedStringType: 'CharacterString';
+
+TaggedType: [TagClass] NumberLiteral ['IMPLICIT' | 'EXPLICIT'] Type;
+TagClass: 'UNIVERSAL' | 'APPLICATION' | 'PRIVATE';
+
+ReferencedType: Reference;
+
+NamedNumberList: '{'^ NamedNumber {','^ NamedNumber} ['...'] '}';
+NamedNumber: Identifier '(' (NumberLiteral | Reference) ')';
+
+NamedBitList: '{'^ NamedBit {','^ NamedBit} ['...'] '}';
+NamedBit: Identifier '(' (NumberLiteral | Reference) ')';
+
+RootEnumeration: EnumItem {','^ EnumItem};
+EnumItem: Identifier ['(' NumberLiteral ')'];
+ExtAdditions: EnumItem {','^ EnumItem};
+
+RootSequence: ComponentType {','^ ComponentType};
+ExtAddSequence: ComponentType {','^ ComponentType};
+
+ComponentType: Reference Type ComponentTypeRest;
+ComponentTypeRest: 'DEFAULT'^ Value | 'OPTIONAL'^ | ;
+
+RootSet: ComponentType {','^ ComponentType};
+ExtAddSet: ComponentType {','^ ComponentType};
+
+RootAlternatives: NamedType {','^ NamedType};
+ExtAddAlternatives: NamedType {','^ NamedType};
+
+NamedType: Reference Type;
+
+Value:
+    'TRUE' |
+    'FALSE' |
+    NumberLiteral |
+    BinaryString |
+    HexString |
+    CharString |
+    '{' ValueItems '}' |
+    Identifier |
+    'NULL' |
+    Reference;
+
+ValueItems: ValueItem {','^ ValueItem};
+ValueItem: Identifier | NumberLiteral | Reference ':' Value;
+
+IdentifierOrKeyword:
+    Identifier |
+    'ALL' | 'ABSENT' | 'ANY' | 'APPLICATION' | 'AUTOMATIC' |
+    'BEGIN' | 'BIT' | 'BMPString' | 'BOOLEAN' | 'BY' |
+    'CHARACTER' | 'CHOICE' | 'COMPONENT' | 'COMPONENTS' | 'CONSTRAINED' |
+    'CONTAINING' | 'DEFAULT' | 'DEFINITIONS' | 'EMBEDDED' | 'END' |
+    'ENUMERATED' | 'EXCEPT' | 'EXPLICIT' | 'EXTENSIBILITY' | 'EXTERNAL' |
+    'FALSE' | 'FROM' | 'GeneralizedTime' | 'GraphicString' | 'IA5String' |
+    'IDENTIFIER' | 'IMPLICIT' | 'IMPLIED' | 'IMPORTS' | 'INCLUDES' |
+    'INSTANCE' | 'INTEGER' | 'INTERSECTION' | 'ISO646String' | 'MAX' |
+    'MIN' | 'MINUS-INFINITY' | 'NULL' | 'NumericString' | 'OBJECT' |
+    'OCTET' | 'OF' | 'OPTIONAL' | 'PATTERN' | 'PDV' | 'PLUS-INFINITY' |
+    'PRESENT' | 'PRIVATE' | 'PrintableString' | 'REAL' | 'RELATIVE-OID' |
+    'SEQUENCE' | 'SET' | 'SIZE' | 'STRING' | 'SYNTAX' | 'T61String' |
+    'TeletexString' | 'TRUE' | 'TYPE' | 'UNION' | 'UNIQUE' |
+    'UNIVERSAL' | 'UniversalString' | 'UNRESTRICTED' | 'UTCTime' |
+    'UTF8String' | 'VideotexString' | 'VisibleString' | 'WITH';

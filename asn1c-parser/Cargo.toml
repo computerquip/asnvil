@@ -1,0 +1,15 @@
+[package]
+name = "asn1c-parser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+parol_runtime.workspace = true
+scnr2 = "0.5"
+thiserror.workspace = true
+miette.workspace = true
+num-bigint.workspace = true
+anyhow.workspace = true
+
+[build-dependencies]
+parol.workspace = true

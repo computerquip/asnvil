@@ -1,0 +1,10 @@
+[package]
+name = "asn1c-ir"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+asn1c-parser = { path = "../asn1c-parser" }
+thiserror.workspace = true
+miette.workspace = true
+num-bigint.workspace = true

@@ -1,0 +1,51 @@
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+Status ::= ENUMERATED {
+    active(0),
+    inactive(1),
+    pending(2)
+}
+
+Person ::= SEQUENCE {
+    name        IA5String,
+    age         INTEGER,
+    active      BOOLEAN,
+    status      Status
+}
+
+Department ::= SEQUENCE {
+    name    IA5String,
+    people  SEQUENCE OF Person
+}
+
+Company ::= SEQUENCE {
+    name        IA5String,
+    departments SET OF Department
+}
+
+Config ::= SEQUENCE {
+    enabled     BOOLEAN DEFAULT TRUE,
+    count       INTEGER DEFAULT 42,
+    label       IA5String DEFAULT "default",
+    flag        BOOLEAN OPTIONAL
+}
+
+Certificate ::= SEQUENCE {
+    serial      INTEGER,
+    key         OCTET STRING,
+    signature   BIT STRING,
+    issuer      OBJECT IDENTIFIER
+}
+
+MessageChoice ::= CHOICE {
+    text        UTF8String,
+    number      INTEGER,
+    flag        BOOLEAN
+}
+
+PersonOrDept ::= CHOICE {
+    person      Person,
+    dept        Department
+}
+
+END;
