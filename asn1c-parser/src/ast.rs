@@ -194,6 +194,36 @@ pub enum AsnType {
     Referenced { name: String, parameters: Option<Vec<ActualParameter>>, span: SourceSpan },
 }
 
+impl Spanned for AsnType {
+    fn span(&self) -> SourceSpan {
+        match self {
+            AsnType::Boolean { span } => *span,
+            AsnType::Integer { span, .. } => *span,
+            AsnType::Real { span } => *span,
+            AsnType::Enumerated { span, .. } => *span,
+            AsnType::BitString { span, .. } => *span,
+            AsnType::OctetString { span } => *span,
+            AsnType::Null { span } => *span,
+            AsnType::Sequence { span, .. } => *span,
+            AsnType::Set { span, .. } => *span,
+            AsnType::Choice { span, .. } => *span,
+            AsnType::SequenceOf { span, .. } => *span,
+            AsnType::SetOf { span, .. } => *span,
+            AsnType::Tagged { span, .. } => *span,
+            AsnType::ObjectIdentifier { span } => *span,
+            AsnType::RelativeOid { span } => *span,
+            AsnType::RestrictedString { span, .. } => *span,
+            AsnType::UnrestrictedString { span } => *span,
+            AsnType::GeneralizedTime { span } => *span,
+            AsnType::UTCTime { span } => *span,
+            AsnType::Any { span } => *span,
+            AsnType::OpenType { span, .. } => *span,
+            AsnType::Constrained { span, .. } => *span,
+            AsnType::Referenced { span, .. } => *span,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum TagClass {
     Universal,

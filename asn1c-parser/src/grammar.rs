@@ -1,10 +1,17 @@
 use crate::ast;
+use crate::ast::Spanned;
 use crate::grammar_trait::*;
 use miette::SourceSpan;
 use num_bigint::BigInt;
+use parol_runtime::Token;
 use parol_runtime::Result;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+
+/// Create a SourceSpan from a parol Token's location
+fn span(token: &Token<'_>) -> SourceSpan {
+    SourceSpan::from(token.location.start()..token.location.end())
+}
 
 pub struct Grammar<'t> {
     pub parse_tree: Option<parol_runtime::ParseTree>,
@@ -201,7 +208,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         self.module_id_stack.push_back(ast::ModuleIdentifier {
             name,
             oid,
-            span: SourceSpan::from(0..0),
+            span: span(&arg.reference.reference),
         });
         Ok(())
     }
@@ -484,12 +491,13 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         Ok(())
     }
 
-    fn boolean_type(&mut self, _arg: &BooleanType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::Boolean { span: SourceSpan::from(0..0) });
+    fn boolean_type(&mut self, arg: &BooleanType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::Boolean { span: span(&arg.boolean_type) });
         Ok(())
     }
 
     fn integer_type(&mut self, arg: &IntegerType<'t>) -> Result<()> {
+        let s = span(&arg.i_n_t_e_g_e_r);
         let named_numbers = if arg.integer_type_opt.is_some() {
             let mut nums = Vec::new();
             while let Some(nn) = self.named_number_stack.pop_back() {
@@ -500,34 +508,24 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         } else {
             None
         };
-        self.type_stack.push_back(ast::AsnType::Integer { named_numbers, span: SourceSpan::from(0..0) });
+        self.type_stack.push_back(ast::AsnType::Integer { named_numbers, span: s });
         Ok(())
     }
 
-    fn real_type(&mut self, _arg: &RealType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::Real { span: SourceSpan::from(0..0) });
+    fn real_type(&mut self, arg: &RealType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::Real { span: span(&arg.real_type) });
         Ok(())
     }
 
     fn enumerated_type(&mut self, arg: &EnumeratedType<'t>) -> Result<()> {
+        let s = span(&arg.e_n_u_m_e_r_a_t_e_d);
         let (items, ext_items, extensible) = if let Some(ref opt) = arg.enumerated_type_opt {
-            // Root items were pushed by enum_item and root_enumeration callbacks
-            // They're on the enum_item_stack in reverse order
             let root_items: Vec<ast::EnumItem> = Vec::new();
-            // We need to know how many items are root vs ext
-            // The root_enumeration callback handles all root items
-            // The ext_additions callback handles ext items
-            // Since ext items are pushed after root items, and we pop from back:
-            // Pop ext items first (they were pushed last), then root items
 
             if let Some(ref ext_opt) = opt.enumerated_type_opt0 {
-                // Ext items are on the stack after root items
                 let ext_count = 1 + ext_opt.ext_additions.ext_additions_list.len();
-                let _total = root_items.len(); // We don't know total yet
+                let _total = root_items.len();
 
-                // Actually, let's collect everything and split
-                // All enum_items are on the stack. Ext items were pushed last.
-                // Pop ext_count items first, then the rest are root
                 let mut all_items = Vec::new();
                 while let Some(item) = self.enum_item_stack.pop_back() {
                     all_items.push(item);
@@ -555,12 +553,13 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             items,
             extensible,
             ext_items,
-            span: SourceSpan::from(0..0),
+            span: s,
         });
         Ok(())
     }
 
     fn bit_string_type(&mut self, arg: &BitStringType<'t>) -> Result<()> {
+        let s = span(&arg.s_t_r_i_n_g);
         let named_bits = if arg.bit_string_type_opt.is_some() {
             let mut bits = Vec::new();
             while let Some(nb) = self.named_bit_stack.pop_back() {
@@ -571,21 +570,22 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         } else {
             None
         };
-        self.type_stack.push_back(ast::AsnType::BitString { named_bits, span: SourceSpan::from(0..0) });
+        self.type_stack.push_back(ast::AsnType::BitString { named_bits, span: s });
         Ok(())
     }
 
-    fn octet_string_type(&mut self, _arg: &OctetStringType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::OctetString { span: SourceSpan::from(0..0) });
+    fn octet_string_type(&mut self, arg: &OctetStringType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::OctetString { span: span(&arg.s_t_r_i_n_g) });
         Ok(())
     }
 
-    fn null_type(&mut self, _arg: &NullType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::Null { span: SourceSpan::from(0..0) });
+    fn null_type(&mut self, arg: &NullType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::Null { span: span(&arg.null_type) });
         Ok(())
     }
 
     fn sequence_type(&mut self, arg: &SequenceType<'t>) -> Result<()> {
+        let s = span(&arg.s_e_q_u_e_n_c_e);
         let (fields, ext_fields, extensible) = if let Some(ref opt) = arg.sequence_type_opt {
             let mut root = Vec::new();
             while let Some(comp) = self.component_stack.pop_back() {
@@ -595,7 +595,6 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
             if let Some(ref ext_opt) = opt.sequence_type_opt0 {
                 let ext_count = 1 + ext_opt.ext_add_sequence.ext_add_sequence_list.len();
-                // Ext items were pushed after root items
                 if ext_count <= root.len() {
                     let ext = root.split_off(root.len() - ext_count);
                     (root, ext, true)
@@ -613,12 +612,13 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             fields,
             extensible,
             ext_fields,
-            span: SourceSpan::from(0..0),
+            span: s,
         });
         Ok(())
     }
 
     fn set_type(&mut self, arg: &SetType<'t>) -> Result<()> {
+        let s = span(&arg.s_e_t);
         let (fields, ext_fields, extensible) = if let Some(ref opt) = arg.set_type_opt {
             let mut root = Vec::new();
             while let Some(comp) = self.component_stack.pop_back() {
@@ -645,12 +645,13 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             fields,
             extensible,
             ext_fields,
-            span: SourceSpan::from(0..0),
+            span: s,
         });
         Ok(())
     }
 
     fn choice_type(&mut self, arg: &ChoiceType<'t>) -> Result<()> {
+        let s = span(&arg.c_h_o_i_c_e);
         let (alts, ext_alts, extensible) = if let Some(ref opt) = arg.choice_type_opt {
             let mut root = Vec::new();
             while let Some(nt) = self.named_type_stack.pop_back() {
@@ -677,83 +678,85 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             alternatives: alts,
             extensible,
             ext_alternatives: ext_alts,
-            span: SourceSpan::from(0..0),
+            span: s,
         });
         Ok(())
     }
 
     fn sequence_of_type(&mut self, _arg: &SequenceOfType<'t>) -> Result<()> {
         let element_type = self.type_stack.pop_back().unwrap();
+        let s = element_type.span();
         self.type_stack.push_back(ast::AsnType::SequenceOf {
             element_type: Box::new(element_type),
-            span: SourceSpan::from(0..0),
+            span: s,
         });
         Ok(())
     }
 
     fn set_of_type(&mut self, _arg: &SetOfType<'t>) -> Result<()> {
         let element_type = self.type_stack.pop_back().unwrap();
+        let s = element_type.span();
         self.type_stack.push_back(ast::AsnType::SetOf {
             element_type: Box::new(element_type),
-            span: SourceSpan::from(0..0),
+            span: s,
         });
         Ok(())
     }
 
-    fn object_identifier_type(&mut self, _arg: &ObjectIdentifierType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::ObjectIdentifier { span: SourceSpan::from(0..0) });
+    fn object_identifier_type(&mut self, arg: &ObjectIdentifierType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::ObjectIdentifier { span: span(&arg.i_d_e_n_t_i_f_i_e_r) });
         Ok(())
     }
 
-    fn relative_oid_type(&mut self, _arg: &RelativeOidType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::RelativeOid { span: SourceSpan::from(0..0) });
+    fn relative_oid_type(&mut self, arg: &RelativeOidType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::RelativeOid { span: span(&arg.relative_oid_type) });
         Ok(())
     }
 
-    fn generalized_time_type(&mut self, _arg: &GeneralizedTimeType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::GeneralizedTime { span: SourceSpan::from(0..0) });
+    fn generalized_time_type(&mut self, arg: &GeneralizedTimeType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::GeneralizedTime { span: span(&arg.generalized_time_type) });
         Ok(())
     }
 
-    fn u_t_c_time_type(&mut self, _arg: &UTCTimeType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::UTCTime { span: SourceSpan::from(0..0) });
+    fn u_t_c_time_type(&mut self, arg: &UTCTimeType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::UTCTime { span: span(&arg.u_t_c_time_type) });
         Ok(())
     }
 
-    fn any_type(&mut self, _arg: &AnyType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::Any { span: SourceSpan::from(0..0) });
+    fn any_type(&mut self, arg: &AnyType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::Any { span: span(&arg.any_type) });
         Ok(())
     }
 
     fn open_type(&mut self, arg: &OpenType) -> Result<()> {
         let defined_by = arg.identifier.identifier.text().to_string();
         self.str_stack.pop_back();
-        self.type_stack.push_back(ast::AsnType::OpenType { defined_by: Some(defined_by), span: SourceSpan::from(0..0) });
+        self.type_stack.push_back(ast::AsnType::OpenType { defined_by: Some(defined_by), span: span(&arg.identifier.identifier) });
         Ok(())
     }
 
     fn restricted_string_type(&mut self, arg: &RestrictedStringType<'t>) -> Result<()> {
-        let charset = match arg {
-            RestrictedStringType::UTF8String(_) => ast::CharsetType::UTF8,
-            RestrictedStringType::NumericString(_) => ast::CharsetType::Numeric,
-            RestrictedStringType::PrintableString(_) => ast::CharsetType::Printable,
-            RestrictedStringType::TeletexString(_) => ast::CharsetType::Teletex,
-            RestrictedStringType::T61String(_) => ast::CharsetType::Teletex,
-            RestrictedStringType::VideotexString(_) => ast::CharsetType::Videotex,
-            RestrictedStringType::IA5String(_) => ast::CharsetType::IA5,
-            RestrictedStringType::GraphicString(_) => ast::CharsetType::Graphic,
-            RestrictedStringType::VisibleString(_) => ast::CharsetType::Visible,
-            RestrictedStringType::ISO646String(_) => ast::CharsetType::General,
-            RestrictedStringType::GeneralString(_) => ast::CharsetType::General,
-            RestrictedStringType::UniversalString(_) => ast::CharsetType::Universal,
-            RestrictedStringType::BMPString(_) => ast::CharsetType::BMP,
+        let (charset, s) = match arg {
+            RestrictedStringType::UTF8String(inner) => (ast::CharsetType::UTF8, span(&inner.u_t_f8_string)),
+            RestrictedStringType::NumericString(inner) => (ast::CharsetType::Numeric, span(&inner.numeric_string)),
+            RestrictedStringType::PrintableString(inner) => (ast::CharsetType::Printable, span(&inner.printable_string)),
+            RestrictedStringType::TeletexString(inner) => (ast::CharsetType::Teletex, span(&inner.teletex_string)),
+            RestrictedStringType::T61String(inner) => (ast::CharsetType::Teletex, span(&inner.t61_string)),
+            RestrictedStringType::VideotexString(inner) => (ast::CharsetType::Videotex, span(&inner.videotex_string)),
+            RestrictedStringType::IA5String(inner) => (ast::CharsetType::IA5, span(&inner.i_a5_string)),
+            RestrictedStringType::GraphicString(inner) => (ast::CharsetType::Graphic, span(&inner.graphic_string)),
+            RestrictedStringType::VisibleString(inner) => (ast::CharsetType::Visible, span(&inner.visible_string)),
+            RestrictedStringType::ISO646String(inner) => (ast::CharsetType::General, span(&inner.i_s_o646_string)),
+            RestrictedStringType::GeneralString(inner) => (ast::CharsetType::General, span(&inner.general_string)),
+            RestrictedStringType::UniversalString(inner) => (ast::CharsetType::Universal, span(&inner.universal_string)),
+            RestrictedStringType::BMPString(inner) => (ast::CharsetType::BMP, span(&inner.b_m_p_string)),
         };
-        self.type_stack.push_back(ast::AsnType::RestrictedString { charset, span: SourceSpan::from(0..0) });
+        self.type_stack.push_back(ast::AsnType::RestrictedString { charset, span: s });
         Ok(())
     }
 
-    fn unrestricted_string_type(&mut self, _arg: &UnrestrictedStringType<'t>) -> Result<()> {
-        self.type_stack.push_back(ast::AsnType::UnrestrictedString { span: SourceSpan::from(0..0) });
+    fn unrestricted_string_type(&mut self, arg: &UnrestrictedStringType<'t>) -> Result<()> {
+        self.type_stack.push_back(ast::AsnType::UnrestrictedString { span: span(&arg.unrestricted_string_type) });
         Ok(())
     }
 
@@ -800,17 +803,17 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             number,
             implicit,
             inner: Box::new(inner),
-            span: SourceSpan::from(0..0),
+            span: span(&arg.number_literal.number_literal),
         });
         Ok(())
     }
 
-    fn referenced_type(&mut self, _arg: &ReferencedType<'t>) -> Result<()> {
+    fn referenced_type(&mut self, arg: &ReferencedType<'t>) -> Result<()> {
         let name = self.str_stack.pop_back().unwrap();
         self.type_stack.push_back(ast::AsnType::Referenced {
             name,
             parameters: None,
-            span: SourceSpan::from(0..0),
+            span: span(&arg.reference.reference),
         });
         Ok(())
     }
@@ -939,19 +942,19 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         Ok(())
     }
 
-    fn type_assignment(&mut self, _arg: &TypeAssignment<'t>) -> Result<()> {
+    fn type_assignment(&mut self, arg: &TypeAssignment<'t>) -> Result<()> {
         let ty = self.type_stack.pop_back().unwrap();
         let name = self.str_stack.pop_back().unwrap();
         self.assignment_stack.push_back(ast::Assignment::Type(ast::TypeAssignment {
             name,
             parameters: None,
             ty,
-            span: SourceSpan::from(0..0),
+            span: span(&arg.reference.reference),
         }));
         Ok(())
     }
 
-    fn value_assignment(&mut self, _arg: &ValueAssignment<'t>) -> Result<()> {
+    fn value_assignment(&mut self, arg: &ValueAssignment<'t>) -> Result<()> {
         let value = self.value_stack.pop_back().unwrap();
         let ty = self.type_stack.pop_back().unwrap();
         let name = self.str_stack.pop_back().unwrap();
@@ -959,7 +962,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             name,
             ty,
             value,
-            span: SourceSpan::from(0..0),
+            span: span(&arg.reference.reference),
         }));
         Ok(())
     }
@@ -1012,6 +1015,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     fn module(&mut self, arg: &Module<'t>) -> Result<()> {
         let module_id = self.module_id_stack.pop_back().unwrap();
         let body = self.module_body_stack.pop_back().unwrap();
+        let module_span = module_id.span;
 
         let tag_default = if arg.module_opt.is_some() {
             self.tag_default_stack.pop_back()
@@ -1026,7 +1030,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             tag_default,
             ext_default,
             body,
-            span: SourceSpan::from(0..0),
+            span: module_span,
         });
         Ok(())
     }
