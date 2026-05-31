@@ -22,6 +22,7 @@ pub struct Grammar<'t> {
     assignment_stack: VecDeque<ast::Assignment>,
     type_stack: VecDeque<ast::AsnType>,
     value_stack: VecDeque<ast::AsnValue>,
+    named_value_stack: VecDeque<ast::NamedValue>,
     component_stack: VecDeque<ast::ComponentType>,
     named_type_stack: VecDeque<ast::NamedType>,
     enum_item_stack: VecDeque<ast::EnumItem>,
@@ -51,6 +52,7 @@ impl<'t> Grammar<'t> {
             assignment_stack: VecDeque::new(),
             type_stack: VecDeque::new(),
             value_stack: VecDeque::new(),
+            named_value_stack: VecDeque::new(),
             component_stack: VecDeque::new(),
             named_type_stack: VecDeque::new(),
             enum_item_stack: VecDeque::new(),
@@ -311,7 +313,82 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     fn import_symbol(&mut self, arg: &ImportSymbol<'t>) -> Result<()> {
         let name = match &*arg.identifier_or_keyword {
             IdentifierOrKeyword::Identifier(inner) => inner.identifier.identifier.text().to_string(),
-            _ => format!("{:?}", arg.identifier_or_keyword),
+            IdentifierOrKeyword::ALL(inner) => inner.a_l_l.text().to_string(),
+            IdentifierOrKeyword::ABSENT(inner) => inner.a_b_s_e_n_t.text().to_string(),
+            IdentifierOrKeyword::AnyType(inner) => inner.any_type.text().to_string(),
+            IdentifierOrKeyword::APPLICATION(inner) => inner.a_p_p_l_i_c_a_t_i_o_n.text().to_string(),
+            IdentifierOrKeyword::AUTOMATIC(inner) => inner.a_u_t_o_m_a_t_i_c.text().to_string(),
+            IdentifierOrKeyword::BEGIN(inner) => inner.b_e_g_i_n.text().to_string(),
+            IdentifierOrKeyword::BIT(inner) => inner.b_i_t.text().to_string(),
+            IdentifierOrKeyword::BMPString(inner) => inner.b_m_p_string.text().to_string(),
+            IdentifierOrKeyword::BooleanType(inner) => inner.boolean_type.text().to_string(),
+            IdentifierOrKeyword::BY(inner) => inner.b_y.text().to_string(),
+            IdentifierOrKeyword::CHARACTER(inner) => inner.c_h_a_r_a_c_t_e_r.text().to_string(),
+            IdentifierOrKeyword::CHOICE(inner) => inner.c_h_o_i_c_e.text().to_string(),
+            IdentifierOrKeyword::COMPONENT(inner) => inner.c_o_m_p_o_n_e_n_t.text().to_string(),
+            IdentifierOrKeyword::COMPONENTS(inner) => inner.c_o_m_p_o_n_e_n_t_s.text().to_string(),
+            IdentifierOrKeyword::CONSTRAINED(inner) => inner.c_o_n_s_t_r_a_i_n_e_d.text().to_string(),
+            IdentifierOrKeyword::CONTAINING(inner) => inner.c_o_n_t_a_i_n_i_n_g.text().to_string(),
+            IdentifierOrKeyword::DEFAULT(inner) => inner.d_e_f_a_u_l_t.text().to_string(),
+            IdentifierOrKeyword::DEFINED(inner) => inner.d_e_f_i_n_e_d.text().to_string(),
+            IdentifierOrKeyword::DEFINITIONS(inner) => inner.d_e_f_i_n_i_t_i_o_n_s.text().to_string(),
+            IdentifierOrKeyword::EMBEDDED(inner) => inner.e_m_b_e_d_d_e_d.text().to_string(),
+            IdentifierOrKeyword::END(inner) => inner.e_n_d.text().to_string(),
+            IdentifierOrKeyword::ENUMERATED(inner) => inner.e_n_u_m_e_r_a_t_e_d.text().to_string(),
+            IdentifierOrKeyword::EXCEPT(inner) => inner.e_x_c_e_p_t.text().to_string(),
+            IdentifierOrKeyword::EXPLICIT(inner) => inner.e_x_p_l_i_c_i_t.text().to_string(),
+            IdentifierOrKeyword::EXTENSIBILITY(inner) => inner.e_x_t_e_n_s_i_b_i_l_i_t_y.text().to_string(),
+            IdentifierOrKeyword::EXTERNAL(inner) => inner.e_x_t_e_r_n_a_l.text().to_string(),
+            IdentifierOrKeyword::FALSE(inner) => inner.f_a_l_s_e.text().to_string(),
+            IdentifierOrKeyword::FROM(inner) => inner.f_r_o_m.text().to_string(),
+            IdentifierOrKeyword::GeneralizedTimeType(inner) => inner.generalized_time_type.text().to_string(),
+            IdentifierOrKeyword::GraphicString(inner) => inner.graphic_string.text().to_string(),
+            IdentifierOrKeyword::IA5String(inner) => inner.i_a5_string.text().to_string(),
+            IdentifierOrKeyword::IDENTIFIER(inner) => inner.i_d_e_n_t_i_f_i_e_r.text().to_string(),
+            IdentifierOrKeyword::IMPLICIT(inner) => inner.i_m_p_l_i_c_i_t.text().to_string(),
+            IdentifierOrKeyword::IMPLIED(inner) => inner.i_m_p_l_i_e_d.text().to_string(),
+            IdentifierOrKeyword::IMPORTS(inner) => inner.i_m_p_o_r_t_s.text().to_string(),
+            IdentifierOrKeyword::INCLUDES(inner) => inner.i_n_c_l_u_d_e_s.text().to_string(),
+            IdentifierOrKeyword::INSTANCE(inner) => inner.i_n_s_t_a_n_c_e.text().to_string(),
+            IdentifierOrKeyword::INTEGER(inner) => inner.i_n_t_e_g_e_r.text().to_string(),
+            IdentifierOrKeyword::INTERSECTION(inner) => inner.i_n_t_e_r_s_e_c_t_i_o_n.text().to_string(),
+            IdentifierOrKeyword::ISO646String(inner) => inner.i_s_o646_string.text().to_string(),
+            IdentifierOrKeyword::MAX(inner) => inner.m_a_x.text().to_string(),
+            IdentifierOrKeyword::MIN(inner) => inner.m_i_n.text().to_string(),
+            IdentifierOrKeyword::MINUSMinusINFINITY(inner) => inner.m_i_n_u_s_minus_i_n_f_i_n_i_t_y.text().to_string(),
+            IdentifierOrKeyword::NullType(inner) => inner.null_type.text().to_string(),
+            IdentifierOrKeyword::NumericString(inner) => inner.numeric_string.text().to_string(),
+            IdentifierOrKeyword::OBJECT(inner) => inner.o_b_j_e_c_t.text().to_string(),
+            IdentifierOrKeyword::OCTET(inner) => inner.o_c_t_e_t.text().to_string(),
+            IdentifierOrKeyword::OF(inner) => inner.o_f.text().to_string(),
+            IdentifierOrKeyword::OPTIONAL(inner) => inner.o_p_t_i_o_n_a_l.text().to_string(),
+            IdentifierOrKeyword::PATTERN(inner) => inner.p_a_t_t_e_r_n.text().to_string(),
+            IdentifierOrKeyword::PDV(inner) => inner.p_d_v.text().to_string(),
+            IdentifierOrKeyword::PLUSMinusINFINITY(inner) => inner.p_l_u_s_minus_i_n_f_i_n_i_t_y.text().to_string(),
+            IdentifierOrKeyword::PRESENT(inner) => inner.p_r_e_s_e_n_t.text().to_string(),
+            IdentifierOrKeyword::PRIVATE(inner) => inner.p_r_i_v_a_t_e.text().to_string(),
+            IdentifierOrKeyword::PrintableString(inner) => inner.printable_string.text().to_string(),
+            IdentifierOrKeyword::RealType(inner) => inner.real_type.text().to_string(),
+            IdentifierOrKeyword::RelativeOidType(inner) => inner.relative_oid_type.text().to_string(),
+            IdentifierOrKeyword::SEQUENCE(inner) => inner.s_e_q_u_e_n_c_e.text().to_string(),
+            IdentifierOrKeyword::SET(inner) => inner.s_e_t.text().to_string(),
+            IdentifierOrKeyword::SIZE(inner) => inner.s_i_z_e.text().to_string(),
+            IdentifierOrKeyword::STRING(inner) => inner.s_t_r_i_n_g.text().to_string(),
+            IdentifierOrKeyword::SYNTAX(inner) => inner.s_y_n_t_a_x.text().to_string(),
+            IdentifierOrKeyword::T61String(inner) => inner.t61_string.text().to_string(),
+            IdentifierOrKeyword::TeletexString(inner) => inner.teletex_string.text().to_string(),
+            IdentifierOrKeyword::TRUE(inner) => inner.t_r_u_e.text().to_string(),
+            IdentifierOrKeyword::TYPE(inner) => inner.t_y_p_e.text().to_string(),
+            IdentifierOrKeyword::UNION(inner) => inner.u_n_i_o_n.text().to_string(),
+            IdentifierOrKeyword::UNIQUE(inner) => inner.u_n_i_q_u_e.text().to_string(),
+            IdentifierOrKeyword::UNIVERSAL(inner) => inner.u_n_i_v_e_r_s_a_l.text().to_string(),
+            IdentifierOrKeyword::UniversalString(inner) => inner.universal_string.text().to_string(),
+            IdentifierOrKeyword::UNRESTRICTED(inner) => inner.u_n_r_e_s_t_r_i_c_t_e_d.text().to_string(),
+            IdentifierOrKeyword::UTCTimeType(inner) => inner.u_t_c_time_type.text().to_string(),
+            IdentifierOrKeyword::UTF8String(inner) => inner.u_t_f8_string.text().to_string(),
+            IdentifierOrKeyword::VideotexString(inner) => inner.videotex_string.text().to_string(),
+            IdentifierOrKeyword::VisibleString(inner) => inner.visible_string.text().to_string(),
+            IdentifierOrKeyword::WITH(inner) => inner.w_i_t_h.text().to_string(),
         };
         self.str_stack.push_back(format!("__import_sym__:{}", name));
         Ok(())
@@ -341,9 +418,14 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn import_item(&mut self, arg: &ImportItem<'t>) -> Result<()> {
-        // Pop: module_reference first, then symbols_imported list
+        // Pop: module_reference first, then the raw Reference pushed by reference() callback,
+        // then the symbols_imported list
         let module_str = self.str_stack.pop_back().unwrap();
         let module = module_str.strip_prefix("__import_mod__:").unwrap_or(&module_str).to_string();
+
+        // The reference() callback also fires for ModuleReference: Reference,
+        // leaving a raw reference name on the stack that needs to be consumed
+        let _raw_ref = self.str_stack.pop_back().unwrap();
 
         let symbols_str = self.str_stack.pop_back().unwrap();
         let symbols: Vec<String> = if let Some(rest) = symbols_str.strip_prefix("__import_list__:") {
@@ -813,8 +895,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
                 ast::AsnValue::CharString(text[1..text.len() - 1].to_string())
             }
             Value::LBraceValueItemsRBrace(_inner) => {
-                // Value items are already on the value_stack from value_item callback
-                ast::AsnValue::Sequence(Vec::new())
+                let items: Vec<ast::NamedValue> = self.named_value_stack.drain(..).rev().collect();
+                ast::AsnValue::Sequence(items)
             }
         Value::Identifier(inner) => {
             let _ = self.str_stack.pop_back();
@@ -831,22 +913,29 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn value_item(&mut self, arg: &ValueItem<'t>) -> Result<()> {
-        let val = match arg {
-            ValueItem::Identifier(inner) => {
-                ast::AsnValue::Referenced(inner.identifier.identifier.text().to_string())
+        let named = match arg {
+            ValueItem::Identifier(_inner) => {
+                let name = self.str_stack.pop_back().unwrap();
+                ast::NamedValue {
+                    name: String::new(),
+                    value: ast::AsnValue::Referenced(name),
+                }
             }
             ValueItem::NumberLiteral(inner) => {
                 let text = inner.number_literal.number_literal.text();
                 let num: BigInt = text.parse().map_err(|e| anyhow::anyhow!("Invalid value: {text}: {e}"))?;
-                ast::AsnValue::Integer(num)
+                ast::NamedValue {
+                    name: String::new(),
+                    value: ast::AsnValue::Integer(num),
+                }
             }
-            ValueItem::ReferenceColonValue(inner) => {
-                let _name = inner.reference.reference.text().to_string();
-                // The value callback already pushed to value_stack
-                self.value_stack.pop_back().unwrap()
+            ValueItem::ReferenceColonValue(_inner) => {
+                let name = self.str_stack.pop_back().unwrap();
+                let val = self.value_stack.pop_back().unwrap();
+                ast::NamedValue { name, value: val }
             }
         };
-        self.value_stack.push_back(val);
+        self.named_value_stack.push_back(named);
         Ok(())
     }
 

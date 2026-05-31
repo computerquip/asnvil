@@ -265,9 +265,87 @@ class Person(AsnType):
     def decode_der(cls, data: bytes) -> "Person": ...
 ```
 
+## Review Backlog (Session: 2026-05-31 Proactive Maintenance)
+
+*Findings from comprehensive codebase review across all crates. Work through items in severity order (Serious first, then Design, then Minor). Mark [x] when complete.*
+
+### 🔴 Serious Issues
+
+#### asn1c-parser
+- [x] **R1: Broken `{ ValueItems }` collection** — `grammar.rs:815-818`. Values pushed by `value_item` callbacks are discarded; branch creates `Vec::new()`. Any ASN.1 value list silently becomes empty. **Fixed**: Added `named_value_stack` to collect `NamedValue` items; `LBraceValueItemsRBrace` drains it. Also fixed `value_item` to pop identifiers from `str_stack` (was causing downstream parse corruption where field names became type names). Tests added in `asn1c-parser/src/lib.rs`.
+- [x] **R2: Broken `import_symbol` fallback** — `grammar.rs:314`. For keyword variants it does `format!("{:?}", arg.identifier_or_keyword)`, producing debug strings. Import lists corrupted. Match all `IdentifierOrKeyword` variants like `export_symbol` does.
+- [ ] **R3: All spans hardcoded to `0..0`** — throughout `grammar.rs`. Every AST node uses `SourceSpan::from(0..0)`. Real `Token<'t>.location()` data is available but never used. All error messages point to line 1, column 0.
+- [ ] **R4: ~30 `.unwrap()` calls on stack operations** — throughout `grammar.rs`. Any grammar mismatch panics instead of producing a parse error. Replace with `.ok_or_else(|| anyhow!(...))`.
+- [ ] **R5: Hex string parsing silently swallows errors** — `grammar.rs:97, 103`. Invalid hex digits become `0` via `unwrap_or(0)`. Should return parse error.
+- [ ] **R41: `IdentifierOrKeyword` doesn't include `Reference`** — `asn1.par:154-170`. Import/export symbols only accept lowercase `Identifier` (`/[a-z].../`) or ~75 keyword literals. Real ASN.1 type names (uppercase, like `Person`, `X509Certificate`) are `Reference` tokens (`/[A-Z].../`) and **cannot appear in import/export positions**. `IdentifierOrKeyword` needs `Reference` as an alternative.
+
+#### asn1c-ir
+- [ ] **R6: Silent error suppression in parameter conversion** — `from_ast.rs:101`. `asn_type_to_ir(t).unwrap_or(ir::AsnType::Any)` silently converts malformed parameter types to `Any`.
+- [ ] **R7: Invalid tag number silently becomes 0** — `from_ast.rs:174`. Negative or out-of-range tag numbers silently coerce to tag `0`.
+- [ ] **R8: Enum value defaults to 0 instead of computing sequentially** — `from_ast.rs:209-214`. Missing enum values should be previous value + 1, not always `0`.
+- [ ] **R9: No duplicate type/name validation** — entire crate. Two types with the same name silently coexist; `resolve_type` finds only the first one via `.find()`.
+- [ ] **R10: Import existence not validated** — `resolver.rs:45-76`. A module can import `"NonExistentType"` and pass validation — the symbol is never checked to actually exist in the target module.
+
+#### asn1c-codegen
+- [ ] **R11: SET elements not sorted during `encode_der`** — `struct.txt`. DER requires SET elements in canonical TLV order. Template encodes fields in declaration order, not by encoded byte order. Re-encoding produces different bytes.
+- [ ] **R12: DER time encoding uses `BerEncoder` instead of `DerEncoder`** — `struct.txt:787`. GeneralizedTime/UTCTime fields in `encode_der` use non-canonical BER encoder.
+- [ ] **R13: `list_type.txt` `encode_der` delegates to `encode_ber`** — `list_type.txt:82-83`. SET OF elements should be sorted for DER; this bypasses canonicalization.
+- [ ] **R14: String escaping incomplete** — `python.rs:135`. `ValueLiteral::String` escaping doesn't handle `\n`, `\t`, `\r`, or control characters. Produces invalid Python output.
+
+#### asn1c-runtime-python
+- [ ] **R15: Negative integer encoding broken** — `ber.py:56-64` and `der.py:32-37`. All negative integers from -127 to -1 encode as `[0xFF]` (decodes to -1). -128 encodes as `[0xFF]` instead of `[0x80]`. Missing `num_bytes.insert(0, temp & 0xFF)` after the while loop.
+- [ ] **R16: Missing bounds checks in `read_set_elements`** — `der.py:147-165`. Long-form tag parsing does `content[pos]` without bounds check; truncated input raises `IndexError` instead of `TruncatedInputError`.
+
+#### tests
+- [ ] **R17: Integration tests not runnable from repo** — `test_x509_roundtrip.py`, `test_ldap_roundtrip.py`. Hardcoded `/tmp/asn1c-integration-test/` paths and imports from non-existent `.py` files. Tests only work after manual pre-generation.
+- [ ] **R18: No test coverage for negative integers** — no test file exercises encoding/decoding of negative integers (the broken encoding in R15 would never be caught).
+
+### 🟠 Design / Architecture Issues
+
+#### asn1c-parser
+- [ ] **R19: OID string marker protocol is fragile** — `grammar.rs:132-191`. OIDs serialized as comma-joined strings with `__oid_name__:`/`__oid_num__:` prefixes. Should use a dedicated stack.
+- [ ] **R20: ASN.1 semantic decision in parser layer** — `grammar.rs:916`. Absent EXPORTS defaults to "ALL" in the parser; should be an IR-layer concern.
+- [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
+- [ ] **R22: No constraint parsing** — `asn1.par`. Grammar has no constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` cannot be parsed.
+- [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
+- [ ] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. The generic `reference()` callback fires for **every** `Reference` token, pushing raw text. When a more specific callback (e.g., `module_reference`, `open_type`) handles the same non-terminal, two entries end up on the stack. Downstream callbacks like `import_item()` accumulated dead code (shadowed variables) to silently consume duplicates. Fix: either don't push in `reference()`, or use dedicated stacks per domain.
+
+#### asn1c-ir
+- [ ] **R24: `ConversionError` and `IrError` disconnected** — two separate error types with no `From` impl. Pipeline error handling is verbose and inconsistent.
+- [ ] **R25: ObjectClass/Object/ObjectSet assignments silently dropped** — `from_ast.rs:37`. Wildcard match with no diagnostic.
+- [ ] **R26: ~60 lines of duplicated field resolution logic** — `resolver.rs:132-194`. Sequence, Set, and Choice resolution arms are nearly identical.
+
+#### asn1c-codegen
+- [ ] **R27: Massive template duplication** — `struct.txt` (2014 lines), `choice.txt` (1576 lines). Four nearly-identical method blocks per template. ~5000+ lines of duplicated logic. Root cause of most consistency bugs.
+- [ ] **R28: Stringly-typed encoding enum** — `BerFieldInfo.encoding` uses raw strings. Typos silently fall through to wrong encoding paths.
+- [ ] **R29: `thiserror` dependency declared but never used** — `Cargo.toml:8`.
+- [ ] **R30: Dead code** — `code_ast.rs`: `Function`, `TemplateRef`, `FunctionDecl`, `Constant` variants are never used.
+- [ ] **R31: `render_function()` always bails** — `python.rs:331-333`. Should be removed along with `FunctionDecl` variant.
+
+#### CLI
+- [ ] **R32: `--encoding` argument parsed but never used** — `main.rs:27`. Generated code always includes both BER and DER methods regardless.
+- [ ] **R33: `miette` and `num-bigint` dependencies declared but unused** — `asn1c/Cargo.toml`.
+- [ ] **R34: `copy_dir` reimplementation** — `main.rs:153-166`. Doesn't handle symlinks or permissions.
+
+### 🟡 Minor Issues
+- [ ] **R35: Export "ALL" detection by string value** — `grammar.rs:299`. Treats keyword `ALL` and identifier `ALL` identically.
+- [ ] **R36: `extension_default` callback is dead code** — `grammar.rs:127-130`.
+- [ ] **R37: 4/6 `IrError` variants never used** — `error.rs`.
+- [ ] **R38: `AsnAny` has no `__eq__` or `__repr__`** — `types.py:98-102`.
+- [ ] **R39: `capitalize()` doesn't handle Unicode** — `builder.rs:35-41`.
+- [ ] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — `python.rs:81`.
+
+### Original Backlog (Milestone 10+)
+1. SNMP integration test (RFC 3416 based)
+2. PER, OER, XER, JER encoding backends
+3. Rust, TypeScript, C, Go backends
+4. CHOICE as field within SEQUENCE (works for referenced CHOICE types; inline CHOICE type annotation needs improvement)
+
 ## Next Session Notes
 
 **What's done:**
+- **R1 Fixed: Broken `{ ValueItems }` collection** — Added `named_value_stack` to Grammar struct; `value_item` pushes `NamedValue` items; `LBraceValueItemsRBrace` drains and collects via `rev().collect()`. Also fixed `value_item` Identifier/ReferenceColonValue cases to pop from `str_stack` (was leaking identifiers and corrupting downstream parse). 2 Rust unit tests added. 18 Python roundtrip tests verified passing.
+- **R2 Fixed: Broken `import_symbol` fallback** — Replaced `_ => format!("{:?}", ...)` with exhaustive match on all 76 `IdentifierOrKeyword` variants (matching `export_symbol` pattern). Also cleaned up a latent bug where the `reference()` callback's raw push duplicated the module reference on the stack (added `_raw_ref` pop with documenting comment). 2 Rust unit tests added (`test_import_keyword_symbols`, `test_import_multiple_keyword_symbols`). All 4 parser tests pass.
 - Template engine migrated from Minijinja to Askama v0.16.0
 - struct.j2 template nesting corruption resolved
 - All 7 classes generate valid Python with encode_ber, encode_der, decode_der
