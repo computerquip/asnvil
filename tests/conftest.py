@@ -3,17 +3,27 @@ import os
 import shutil
 import subprocess
 import tempfile
+import importlib.util
 from pathlib import Path
 
 import pytest
 
 # ─── Path setup ──────────────────────────────────────────────────────
 
-# Add project root so `from asnvil_runtime` resolves to the symlink
-_project_root = os.path.join(os.path.dirname(__file__), "..")
-_project_root = os.path.normpath(_project_root)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
+# Load asnvil-runtime-python/ as the `asnvil_runtime` package.
+# Python module names cannot contain hyphens, so we register the package
+# manually via importlib.
+_runtime_dir = Path(__file__).resolve().parent.parent / "asnvil-runtime-python"
+_runtime_init = _runtime_dir / "__init__.py"
+if "asnvil_runtime" not in sys.modules:
+    import types
+    _pkg = types.ModuleType("asnvil_runtime")
+    _pkg.__path__ = [str(_runtime_dir)]
+    _pkg.__file__ = str(_runtime_init)
+    sys.modules["asnvil_runtime"] = _pkg
+    # Execute __init__.py in the package namespace
+    with open(_runtime_init) as _f:
+        exec(compile(_f.read(), str(_runtime_init), "exec"), _pkg.__dict__)
 
 # ─── Constants ───────────────────────────────────────────────────────
 
