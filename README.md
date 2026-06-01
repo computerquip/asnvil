@@ -150,7 +150,7 @@ cargo run -- --help             # CLI help
 | 6: Integration Tests | ✅ Done | X.509, LDAP roundtrip tests, self-contained runner |
 | 7: CHOICE + Indefinite + ANY DEFINED BY | ✅ Done | Explicit tagging, indefinite BER, raw TLV fields |
 | 8: Test Infrastructure | ✅ Done | 100+ unit tests, integration runner, justfile |
-| R27b: Encoding Logic in Code AST | 🔄 In Progress | EncodeStmt/DecodeStmt added to Code AST, TypeRef made language-agnostic. Phases 4-7 remaining. |
+| R27b: Encoding Logic in Code AST | ✅ Done | EncodeStmt/DecodeStmt in Code AST, TypeRef language-agnostic, ~2000 lines of template encoding dispatch moved to Rust |
 | 9: SNMP Integration | Planned | RFC 3416-based integration test |
 | 10: PER/OER/XER/JER | Future | Additional encoding backends |
 | 11: More Languages | Future | Rust, TypeScript, C, Go backends |

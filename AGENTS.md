@@ -194,21 +194,16 @@ just test-all           # Everything
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of CHOICE class name (referenced CHOICE types work correctly)
 - Nested SEQUENCE OF with SEQUENCE elements: list encoding uses inner content without per-element TLV wrapper (pre-existing issue, not specific to new features)
 
-### R27b: Move Encoding Logic from Templates to Builder 🔄 IN PROGRESS
+### R27b: Move Encoding Logic from Templates to Builder ✅ COMPLETE
 
-#### Phase 1-3: Code AST Enrichment ✅ COMPLETE
-- **`EncodeStmt`/`DecodeStmt`** enums added to `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
-- **`TypeRef`/`BuiltinType`** made properly language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
-- **`Field`** extended with `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` (populated in later phases)
+- **`EncodeStmt`/`DecodeStmt`** enums in `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
+- **`TypeRef`/`BuiltinType`** made language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
+- **`Field`** has `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` populated by builder
 - **`ChoiceAlternative`** separated from `Field` struct with own encoding operations and `tagging_mode`
-- **Templates simplified**: `struct.txt` (2014→215 lines), `choice.txt` (1576→328 lines) using shared macros
+- **~2000 lines of template encoding dispatch moved to Rust**: deleted `macros.txt`, `struct.txt`, `choice.txt`, `list_type.txt`
+- Only 3 thin structural wrappers remain: `enum.txt`, `type_alias.txt`, `module_header.txt`
+- Adding a new language requires implementing renderer methods, not duplicating template logic
 - All 143 tests pass identically
-
-#### Remaining R27b Phases
-- [ ] Phase 4: Build `EncodeStmt`/`DecodeStmt` from `BerFieldInfo` in `builder.rs`
-- [ ] Phase 5: Extend `LanguageRenderer` trait + implement encoding/decoding rendering
-- [ ] Phase 6: Replace remaining templates with renderer methods
-- [ ] Phase 7: Delete `macros.txt`, verify all tests pass
 
 ### Template Engine: Askama (v0.16.0)
 
@@ -255,21 +250,15 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Template (`struct.txt`): Added "any" encoding for encode_ber, encode_ber_indefinite, encode_der, decode_der, decode_ber_indefinite with full TLV reconstruction
 - Test: `tests/any_defined_by.asn1` + verified roundtrip (INTEGER 42 as raw TLV in ANY DEFINED BY field)
 
-### R27b: Move Encoding Logic from Templates to Builder 🔄 IN PROGRESS
+### R27b: Move Encoding Logic from Templates to Builder ✅ COMPLETE
 
-#### Phase 1-3: Code AST Enrichment ✅ COMPLETE
-- **`EncodeStmt`/`DecodeStmt`** enums added to `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
-- **`TypeRef`/`BuiltinType`** made properly language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
-- **`Field`** extended with `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` (populated in later phases)
+- **`EncodeStmt`/`DecodeStmt`** enums in `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
+- **`TypeRef`/`BuiltinType`** made language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
+- **`Field`** has `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` populated by builder
 - **`ChoiceAlternative`** separated from `Field` struct with own encoding operations and `tagging_mode`
-- **Templates simplified**: `struct.txt` (2014→215 lines), `choice.txt` (1576→328 lines) using shared macros
+- **~2000 lines of template encoding dispatch moved to Rust**: deleted `macros.txt`, `struct.txt`, `choice.txt`, `list_type.txt`
+- Only 3 thin structural wrappers remain: `enum.txt`, `type_alias.txt`, `module_header.txt`
 - All 143 tests pass identically
-
-#### Remaining R27b Phases
-- [ ] Phase 4: Build `EncodeStmt`/`DecodeStmt` from `BerFieldInfo` in `builder.rs`
-- [ ] Phase 5: Extend `LanguageRenderer` trait + implement encoding/decoding rendering
-- [ ] Phase 6: Replace remaining templates with renderer methods
-- [ ] Phase 7: Delete `macros.txt`, verify all tests pass
 
 **Remaining Backlog:**
 - [ ] SNMP integration test (RFC 3416 based)
