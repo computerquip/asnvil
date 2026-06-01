@@ -1,5 +1,10 @@
 import sys
-sys.path.insert(0, '/tmp/asn1c-integration-test/x509')
+import os
+# The integration test runner sets PYTHONPATH to the compiled output dir.
+# When running standalone, set INTEG_OUTPUT_DIR to the output directory.
+_integ_output = os.environ.get("INTEG_OUTPUT_DIR")
+if _integ_output:
+    sys.path.insert(0, _integ_output)
 
 from PKIX1Explicit import (
     Certificate, TBSCertificate, AlgorithmIdentifier, Validity,

@@ -33,7 +33,8 @@ def _minimal_integer_bytes(value: int, signed: bool = True) -> bytes:
         while temp < -0x80 or temp > 0x7F:
             num_bytes.insert(0, temp & 0xFF)
             temp >>= 8
-        if len(num_bytes) == 0 or (num_bytes[0] & 0x80) == 0:
+        num_bytes.insert(0, temp & 0xFF)
+        if (num_bytes[0] & 0x80) == 0:
             num_bytes.insert(0, 0xFF)
     else:
         while temp > 0:
@@ -59,7 +60,7 @@ class DerEncoder(BerEncoder):
 
     def write_boolean(self, value: bool) -> None:
         """Write boolean as exactly 0x00 or 0xFF (DER requirement)."""
-        self.write_tag(1, 1, False)
+        self.write_tag(0, 1, False)
         self.write_length(1)
         self._buf.append(0xFF if value else 0x00)
 
@@ -147,6 +148,8 @@ class DerDecoder(BerDecoder):
             if tag_n == 0x1F:
                 tag_n = 0
                 while True:
+                    if pos >= len(content):
+                        raise TruncatedInputError("Truncated long tag in SET")
                     byte = content[pos]
                     pos += 1
                     tag_n = (tag_n << 7) | (byte & 0x7F)
@@ -154,6 +157,8 @@ class DerDecoder(BerDecoder):
                         break
 
             # Read length
+            if pos >= len(content):
+                raise TruncatedInputError("Truncated length in SET")
             first = content[pos]
             pos += 1
             if first <= 0x7F:
@@ -162,10 +167,14 @@ class DerDecoder(BerDecoder):
                 num_bytes = first & 0x7F
                 elem_len = 0
                 for _ in range(num_bytes):
+                    if pos >= len(content):
+                        raise TruncatedInputError("Truncated long-form length in SET")
                     elem_len = (elem_len << 8) | content[pos]
                     pos += 1
 
             # Read value
+            if pos + elem_len > len(content):
+                raise TruncatedInputError("Truncated element value in SET")
             elem_value = content[pos : pos + elem_len]
             pos += elem_len
 

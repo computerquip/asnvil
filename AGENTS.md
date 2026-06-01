@@ -79,6 +79,11 @@ cargo build -p asn1c-parser    # Build parser only (triggers Parol generation)
 cargo run -- -o output/ test.asn1    # Compile an ASN.1 file
 cargo run -- --help            # CLI help
 cargo run --example demo       # Run full pipeline demo (IR → codegen → DER test)
+cargo test --workspace         # All Rust unit tests (48 tests)
+just test-rust                 # Alias for cargo test --workspace
+just test-python               # Python runtime unit tests (55 tests)
+just test-integration          # Self-contained integration test runner
+just test-all                  # Run all tests (Rust + Python + integration)
 ```
 
 ## Principles
@@ -277,6 +282,10 @@ class Person(AsnType):
 - [ ] **R3: All spans hardcoded to `0..0`** — throughout `grammar.rs`. Every AST node uses `SourceSpan::from(0..0)`. Real `Token<'t>.location()` data is available but never used. All error messages point to line 1, column 0.
 - [x] **R4: ~30 `.unwrap()` calls on stack operations** — throughout `grammar.rs`. Any grammar mismatch panics instead of producing a parse error. Replace with `.ok_or_else(|| anyhow!(...))`.
  - [x] **R5: Hex string parsing silently swallows errors** — `grammar.rs:97, 103`. Invalid hex digits become `0` via `unwrap_or(0)`. Should return parse error. **Fixed**: Replaced `.unwrap_or(0)` with `.map_err()` returning `parol_runtime::ParolError::UserError`. Also fixed a latent bug: slice was `text[1..text.len()-1]` which left a trailing `'` in the hex data; corrected to `text[1..text.len()-2]` to strip both `'` and `H` suffix. 3 tests added: valid hex string, odd-length hex string (zero-padding), and invalid hex string (verifies error is returned).
+ - [x] **R15: Negative integer encoding broken** — `ber.py:56-64` and `der.py:32-37`. Missing `num_bytes.insert(0, temp & 0xFF)` after the while loop. **Fixed**: Added the missing line to both `ber.py` and `der.py`. Also fixed `DerEncoder.write_boolean` tag class (was APPLICATION, should be UNIVERSAL). 55 runtime tests cover this.
+ - [x] **R16: Missing bounds checks in `read_set_elements`** — `der.py:147-165`. Long-form tag parsing does `content[pos]` without bounds check; truncated input raises `IndexError` instead of `TruncatedInputError`. **Fixed**: Added bounds checks before each `content[pos]` access in the tag/length parsing loops.
+ - [x] **R17: Integration tests not runnable from repo** — `test_x509_roundtrip.py`, `test_ldap_roundtrip.py`. Hardcoded `/tmp/asn1c-integration-test/` paths and imports from non-existent `.py` files. Tests only work after manual pre-generation. **Fixed**: Created `tests/run_integration.py` self-contained runner that compiles ASN.1, copies runtime, then runs pytest. Removed hardcoded `/tmp/` paths from X.509 and LDAP tests. Moved `test_indefinite_ber.py` to `tests/`. Added `test_any_defined_by.py`. Created pytest fixtures in `tests/conftest.py`.
+ - [x] **R18: No test coverage for negative integers** — no test file exercises encoding/decoding of negative integers. **Fixed**: Covered by 55 runtime tests in `tests/test_runtime.py`.
  - [x] **R41: `IdentifierOrKeyword` doesn't include `Reference`** — `asn1.par:154-170`. Import/export symbols now accept uppercase type names (`Person`, `X509Certificate`). Also fixed R42 `reference()` callback stack pollution: `export_symbol` and `import_symbol` pop the duplicate entry pushed by `reference()` before extracting the name. 2 tests added.
 
 #### asn1c-ir

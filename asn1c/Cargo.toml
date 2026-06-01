@@ -16,3 +16,8 @@ clap.workspace = true
 anyhow.workspace = true
 miette.workspace = true
 num-bigint.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"

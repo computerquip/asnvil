@@ -1,19 +1,3 @@
-import sys
-import os
-import importlib
-
-_output_dir = os.path.join(os.path.dirname(__file__), "output")
-
-# Ensure output dir is first in path
-if _output_dir in sys.path:
-    sys.path.remove(_output_dir)
-sys.path.insert(0, _output_dir)
-
-# Force reload if already imported
-for _mod in list(sys.modules.keys()):
-    if _mod == "TestModule" or _mod.startswith("asn1c_runtime"):
-        del sys.modules[_mod]
-
 from TestModule import Person, PersonContact
 from asn1c_runtime import BerDecoder, DerEncoder, DerDecoder
 

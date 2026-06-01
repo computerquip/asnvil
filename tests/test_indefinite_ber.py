@@ -1,9 +1,5 @@
 """Tests for indefinite length BER encoding/decoding roundtrip."""
-import sys
-sys.path.insert(0, "output")
-
 from TestModule import Person, Department, Company, Config, Certificate, Status
-from asn1c_runtime.types import BitString, ObjectIdentifier
 
 
 def test_person_ber_indefinite_roundtrip():

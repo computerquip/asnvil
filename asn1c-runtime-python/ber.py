@@ -59,7 +59,8 @@ class BerEncoder:
             while temp < -0x80 or temp > 0x7F:
                 num_bytes.insert(0, temp & 0xFF)
                 temp >>= 8
-            if len(num_bytes) == 0 or (num_bytes[0] & 0x80) == 0:
+            num_bytes.insert(0, temp & 0xFF)
+            if (num_bytes[0] & 0x80) == 0:
                 num_bytes.insert(0, 0xFF)
             self._buf.extend(num_bytes)
         else:

@@ -1,8 +1,4 @@
 """Roundtrip tests for explicitly tagged CHOICE alternatives."""
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 from asn1c_runtime import DerEncoder, DerDecoder
 from TestModule import Person, Department, Entity, Container, MixedChoice
 
