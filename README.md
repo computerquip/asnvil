@@ -27,12 +27,14 @@ ASN.1 source (.asn1)
     ↓
 [Semantic Analyzer] → Language-agnostic IR
     ↓
-[Code AST Builder] → Language-agnostic Code AST
+[Code AST Builder] → Code AST with EncodeStmt/DecodeStmt encoding operations
     ↓
-[Python Renderer] → Target language source (Askama templates)
+[Python Renderer] → Target language source (Askama templates + renderer methods)
     ↓
 [Python Runtime] → BER/DER encode/decode
 ```
+
+**Code AST:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`) and encoding operations (`EncodeStmt`/`DecodeStmt`). Each field knows exactly how to encode and decode itself. `TypeRef`/`BuiltinType` are fully language-agnostic — `PythonRenderer` maps `BuiltinType::Integer` → `"int"`, a future `RustRenderer` would map it → `"i64"`, etc.
 
 ### Crates
 
@@ -41,7 +43,7 @@ ASN.1 source (.asn1)
 | `asnvil` | CLI binary with `clap` argument parsing |
 | `asnvil-parser` | Parol grammar (`.par`), build.rs, AST types |
 | `asnvil-ir` | IR data structures + type resolver |
-| `asnvil-codegen` | IR → Code AST → Python renderer with Askama templates |
+| `asnvil-codegen` | IR → Code AST (with `EncodeStmt`/`DecodeStmt`) → Python renderer |
 | `asnvil-runtime-python` | Pure Python stdlib-only runtime (shipped as directory, not a pip package) |
 
 ## CLI Options
@@ -148,6 +150,7 @@ cargo run -- --help             # CLI help
 | 6: Integration Tests | ✅ Done | X.509, LDAP roundtrip tests, self-contained runner |
 | 7: CHOICE + Indefinite + ANY DEFINED BY | ✅ Done | Explicit tagging, indefinite BER, raw TLV fields |
 | 8: Test Infrastructure | ✅ Done | 100+ unit tests, integration runner, justfile |
+| R27b: Encoding Logic in Code AST | 🔄 In Progress | EncodeStmt/DecodeStmt added to Code AST, TypeRef made language-agnostic. Phases 4-7 remaining. |
 | 9: SNMP Integration | Planned | RFC 3416-based integration test |
 | 10: PER/OER/XER/JER | Future | Additional encoding backends |
 | 11: More Languages | Future | Rust, TypeScript, C, Go backends |

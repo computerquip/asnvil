@@ -20,6 +20,8 @@ ASN.1 source (.asn1)
 [asnvil-runtime-python] — Pure stdlib Python runtime (ships alongside generated code)
 ```
 
+**Code AST design:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`: tag class, tag number, encoding type, tagging mode) and encoding operations (`EncodeStmt`/`DecodeStmt` enums). `BerFieldInfo` and the statement types coexist — metadata for structural decisions, statements for code generation. Adding a new language requires implementing one `LanguageRenderer`, not duplicating template logic.
+
 ## Crates
 
 | Crate | Purpose |
@@ -27,7 +29,7 @@ ASN.1 source (.asn1)
 | `asnvil` | CLI binary (`asnvil <file.asn1> -o output/`) |
 | `asnvil-parser` | Parol grammar (`asn1.par`), build.rs generation, AST types |
 | `asnvil-ir` | Intermediate representation (resolved types, constraints, values) |
-| `asnvil-codegen` | Code AST builder + Python renderer with **Askama** templates |
+| `asnvil-codegen` | Code AST builder (enriched with `EncodeStmt`/`DecodeStmt`) + per-language renderers |
 | `asnvil-runtime-python/` | Pure Python runtime (NOT a pip package, ships as directory) |
 
 ## Key Files
@@ -41,9 +43,11 @@ ASN.1 source (.asn1)
 | `asnvil-parser/src/ast.rs` | Hand-written AST types for parse tree |
 | `asnvil-ir/src/ir.rs` | IR data structures (AsnModule, AsnType, etc.) |
 | `asnvil-ir/src/resolver.rs` | Type resolution, import/export, circular ref detection |
-| `asnvil-codegen/src/builder.rs` | IR → Code AST transformation |
-| `asnvil-codegen/src/python.rs` | Python renderer with **Askama** derive-based templates |
-| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): struct, choice, enum, type_alias, module_header, list_type |
+| `asnvil-codegen/src/code_ast.rs` | Code AST types: `Declaration`, `Field`, `ChoiceAlternative`, `TypeRef`, `BerFieldInfo`, `EncodeStmt`, `DecodeStmt` |
+| `asnvil-codegen/src/builder.rs` | IR → Code AST transformation (builds `EncodeStmt`/`DecodeStmt` alongside `BerFieldInfo`) |
+| `asnvil-codegen/src/renderer.rs` | `LanguageRenderer` trait for per-language code generation |
+| `asnvil-codegen/src/python.rs` | Python renderer implementing `LanguageRenderer` |
+| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): enum, type_alias, module_header (struct/choice/list templates being replaced by renderer) |
 
 ## Critical Parol v4 Integration Notes
 
@@ -190,6 +194,22 @@ just test-all           # Everything
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of CHOICE class name (referenced CHOICE types work correctly)
 - Nested SEQUENCE OF with SEQUENCE elements: list encoding uses inner content without per-element TLV wrapper (pre-existing issue, not specific to new features)
 
+### R27b: Move Encoding Logic from Templates to Builder 🔄 IN PROGRESS
+
+#### Phase 1-3: Code AST Enrichment ✅ COMPLETE
+- **`EncodeStmt`/`DecodeStmt`** enums added to `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
+- **`TypeRef`/`BuiltinType`** made properly language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
+- **`Field`** extended with `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` (populated in later phases)
+- **`ChoiceAlternative`** separated from `Field` struct with own encoding operations and `tagging_mode`
+- **Templates simplified**: `struct.txt` (2014→215 lines), `choice.txt` (1576→328 lines) using shared macros
+- All 143 tests pass identically
+
+#### Remaining R27b Phases
+- [ ] Phase 4: Build `EncodeStmt`/`DecodeStmt` from `BerFieldInfo` in `builder.rs`
+- [ ] Phase 5: Extend `LanguageRenderer` trait + implement encoding/decoding rendering
+- [ ] Phase 6: Replace remaining templates with renderer methods
+- [ ] Phase 7: Delete `macros.txt`, verify all tests pass
+
 ### Template Engine: Askama (v0.16.0)
 
 Templates use **Askama** (compile-time, derive-based). See the **`askama`** skill. **The `minijinja` skill is obsolete.**
@@ -206,6 +226,8 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - **Never** replace `or`/`and`/`not` → `||`/`&&`/`!` globally — only inside `{% %}` blocks
 - `{% if !x.is_empty() %}` for strings, `{% if field.has_ber %}` for optional structs
 - Sort in Rust before passing to template (Askama doesn't support `|sort(attribute='x')`)
+
+**Template migration (R27b):** `struct.txt`, `choice.txt`, and `list_type.txt` are being replaced by renderer methods that interpret `EncodeStmt`/`DecodeStmt` from the Code AST. `enum.txt`, `type_alias.txt`, and `module_header.txt` remain as thin structural wrappers.
 
 ### Milestone 7+: Backlog
 
@@ -232,6 +254,22 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Type annotation: `OpenType` fields now generate `bytes` type (raw TLV storage)
 - Template (`struct.txt`): Added "any" encoding for encode_ber, encode_ber_indefinite, encode_der, decode_der, decode_ber_indefinite with full TLV reconstruction
 - Test: `tests/any_defined_by.asn1` + verified roundtrip (INTEGER 42 as raw TLV in ANY DEFINED BY field)
+
+### R27b: Move Encoding Logic from Templates to Builder 🔄 IN PROGRESS
+
+#### Phase 1-3: Code AST Enrichment ✅ COMPLETE
+- **`EncodeStmt`/`DecodeStmt`** enums added to `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
+- **`TypeRef`/`BuiltinType`** made properly language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
+- **`Field`** extended with `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` (populated in later phases)
+- **`ChoiceAlternative`** separated from `Field` struct with own encoding operations and `tagging_mode`
+- **Templates simplified**: `struct.txt` (2014→215 lines), `choice.txt` (1576→328 lines) using shared macros
+- All 143 tests pass identically
+
+#### Remaining R27b Phases
+- [ ] Phase 4: Build `EncodeStmt`/`DecodeStmt` from `BerFieldInfo` in `builder.rs`
+- [ ] Phase 5: Extend `LanguageRenderer` trait + implement encoding/decoding rendering
+- [ ] Phase 6: Replace remaining templates with renderer methods
+- [ ] Phase 7: Delete `macros.txt`, verify all tests pass
 
 **Remaining Backlog:**
 - [ ] SNMP integration test (RFC 3416 based)
@@ -327,7 +365,7 @@ class Person(AsnType):
 - [ ] **R26: ~60 lines of duplicated field resolution logic** — `resolver.rs:132-194`. Sequence, Set, and Choice resolution arms are nearly identical.
 
 #### asnvil-codegen
-- [ ] **R27: Massive template duplication** — `struct.txt` (2014 lines), `choice.txt` (1576 lines). Four nearly-identical method blocks per template. ~5000+ lines of duplicated logic. Root cause of most consistency bugs.
+- [ ] **R27: Massive template duplication** — `struct.txt` (2014 lines), `choice.txt` (1576 lines). Four nearly-identical method blocks per template. ~5000+ lines of duplicated logic. Root cause of most consistency bugs. **R27b Phase 1-3 complete**: Code AST enriched with `EncodeStmt`/`DecodeStmt`, `TypeRef` made language-agnostic, `ChoiceAlternative` separated from `Field`. Templates simplified (struct.txt 215 lines, choice.txt 328 lines). Phases 4-7 remaining.
 - [ ] **R28: Stringly-typed encoding enum** — `BerFieldInfo.encoding` uses raw strings. Typos silently fall through to wrong encoding paths.
 - [ ] **R29: `thiserror` dependency declared but never used** — `Cargo.toml:8`.
 - [ ] **R30: Dead code** — `code_ast.rs`: `Function`, `TemplateRef`, `FunctionDecl`, `Constant` variants are never used.

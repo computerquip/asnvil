@@ -202,12 +202,15 @@ impl CodeAstBuilder {
                         } else {
                             self.build_type(&a.ty)
                         };
+                        let ber = Some(self.ber_info_for_type(&a.ty));
+                        let encode_stmts = ber.as_ref().map(|b| Self::build_choice_encode_stmts(&a.name, b)).unwrap_or_default();
+                        let decode_stmts = ber.as_ref().map(|b| Self::build_choice_decode_stmts(&a.name, b)).unwrap_or_default();
                         CodeChoiceAlt {
                             name: a.name.clone(),
                             ty: ty_ref,
-                            ber: Some(self.ber_info_for_type(&a.ty)),
-                            encode_stmts: Vec::new(),
-                            decode_stmts: Vec::new(),
+                            ber,
+                            encode_stmts,
+                            decode_stmts,
                             tagging_mode: "inherent".to_string(),
                         }
                     })
@@ -218,12 +221,15 @@ impl CodeAstBuilder {
                         } else {
                             self.build_type(&a.ty)
                         };
+                        let ber = Some(self.ber_info_for_type(&a.ty));
+                        let encode_stmts = ber.as_ref().map(|b| Self::build_choice_encode_stmts(&a.name, b)).unwrap_or_default();
+                        let decode_stmts = ber.as_ref().map(|b| Self::build_choice_decode_stmts(&a.name, b)).unwrap_or_default();
                         CodeChoiceAlt {
                             name: a.name.clone(),
                             ty: ty_ref,
-                            ber: Some(self.ber_info_for_type(&a.ty)),
-                            encode_stmts: Vec::new(),
-                            decode_stmts: Vec::new(),
+                            ber,
+                            encode_stmts,
+                            decode_stmts,
                             tagging_mode: "inherent".to_string(),
                         }
                     })))
@@ -311,15 +317,19 @@ impl CodeAstBuilder {
             self.build_type(&f.ty)
         };
 
+        let ber = Some(self.ber_info_for_field(&f.ty, parent_name, &f.name));
+        let encode_stmts = ber.as_ref().map(|b| Self::build_encode_stmts(&f.name, b)).unwrap_or_default();
+        let decode_stmts = ber.as_ref().map(|b| Self::build_decode_stmts(&f.name, b)).unwrap_or_default();
+
         Field {
             name: f.name.clone(),
             ty,
             optional: f.optional || f.default.is_some(),
             default: f.default.as_ref().map(asn_value_to_literal),
             doc_comment: None,
-            ber: Some(self.ber_info_for_field(&f.ty, parent_name, &f.name)),
-            encode_stmts: Vec::new(),
-            decode_stmts: Vec::new(),
+            ber,
+            encode_stmts,
+            decode_stmts,
             order,
         }
     }
@@ -463,21 +473,31 @@ impl CodeAstBuilder {
                 let alt_fields: Vec<CodeChoiceAlt> = alternatives
                     .iter()
                     .enumerate()
-                    .map(|(_, a)| CodeChoiceAlt {
-                        name: a.name.clone(),
-                        ty: self.build_type(&a.ty),
-                        ber: Some(self.ber_info_for_type(&a.ty)),
-                        encode_stmts: Vec::new(),
-                        decode_stmts: Vec::new(),
-                        tagging_mode: "inherent".to_string(),
+                    .map(|(_, a)| {
+                        let ber = Some(self.ber_info_for_type(&a.ty));
+                        let encode_stmts = ber.as_ref().map(|b| Self::build_choice_encode_stmts(&a.name, b)).unwrap_or_default();
+                        let decode_stmts = ber.as_ref().map(|b| Self::build_choice_decode_stmts(&a.name, b)).unwrap_or_default();
+                        CodeChoiceAlt {
+                            name: a.name.clone(),
+                            ty: self.build_type(&a.ty),
+                            ber,
+                            encode_stmts,
+                            decode_stmts,
+                            tagging_mode: "inherent".to_string(),
+                        }
                     })
-                    .chain(ext.iter().flat_map(|ea| ea.iter().enumerate().map(|(_, a)| CodeChoiceAlt {
-                        name: a.name.clone(),
-                        ty: self.build_type(&a.ty),
-                        ber: Some(self.ber_info_for_type(&a.ty)),
-                        encode_stmts: Vec::new(),
-                        decode_stmts: Vec::new(),
-                        tagging_mode: "inherent".to_string(),
+                    .chain(ext.iter().flat_map(|ea| ea.iter().enumerate().map(|(_, a)| {
+                        let ber = Some(self.ber_info_for_type(&a.ty));
+                        let encode_stmts = ber.as_ref().map(|b| Self::build_choice_encode_stmts(&a.name, b)).unwrap_or_default();
+                        let decode_stmts = ber.as_ref().map(|b| Self::build_choice_decode_stmts(&a.name, b)).unwrap_or_default();
+                        CodeChoiceAlt {
+                            name: a.name.clone(),
+                            ty: self.build_type(&a.ty),
+                            ber,
+                            encode_stmts,
+                            decode_stmts,
+                            tagging_mode: "inherent".to_string(),
+                        }
                     })))
                     .collect();
 
@@ -654,15 +674,19 @@ impl CodeAstBuilder {
             self.build_type(&f.ty)
         };
 
+        let ber = Some(self.ber_info_for_field(&f.ty, parent_name, &f.name));
+        let encode_stmts = ber.as_ref().map(|b| Self::build_encode_stmts(&f.name, b)).unwrap_or_default();
+        let decode_stmts = ber.as_ref().map(|b| Self::build_decode_stmts(&f.name, b)).unwrap_or_default();
+
         Field {
             name: f.name.clone(),
             ty,
             optional: f.optional || f.default.is_some(),
             default: f.default.as_ref().map(asn_value_to_literal),
             doc_comment: None,
-            ber: Some(self.ber_info_for_field(&f.ty, parent_name, &f.name)),
-            encode_stmts: Vec::new(),
-            decode_stmts: Vec::new(),
+            ber,
+            encode_stmts,
+            decode_stmts,
             order: 0,
         }
     }
@@ -1034,6 +1058,212 @@ impl CodeAstBuilder {
             AsnType::OpenType { .. } => TypeRef::Builtin(BuiltinType::Any),
             AsnType::Any => TypeRef::Builtin(BuiltinType::Any),
             _ => TypeRef::Builtin(BuiltinType::Any),
+        }
+    }
+
+    fn make_tag(class: &str, number: u32, constructed: bool) -> Tag {
+        Tag {
+            class: class.to_string(),
+            number,
+            constructed,
+        }
+    }
+
+    fn build_encode_stmts(name: &str, ber: &BerFieldInfo) -> Vec<EncodeStmt> {
+        let value = format!("self.{}", name);
+        let stmt = match ber.encoding.as_str() {
+            "integer" => EncodeStmt::WriteInteger {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", 2, false),
+                value,
+            },
+            "enumerated" => EncodeStmt::WriteEnumerated {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", 10, false),
+                value,
+            },
+            "boolean" => EncodeStmt::WriteBoolean {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", 1, false),
+                value,
+            },
+            "string" => EncodeStmt::WriteString {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", ber.tag_number, false),
+                value,
+                encoding: ber.string_encoding.clone(),
+            },
+            "bytes" => EncodeStmt::WriteBytes {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", ber.tag_number, false),
+                value,
+                tlv_method: "write_tlv".to_string(),
+            },
+            "bit_string" => EncodeStmt::WriteBitString {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", 3, false),
+                value,
+            },
+            "oid" => EncodeStmt::WriteOid {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", ber.tag_number, false),
+                value,
+            },
+            "null" => EncodeStmt::WriteNull {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", 5, false),
+            },
+            "real" => EncodeStmt::WriteReal {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", 9, false),
+                value,
+            },
+            "time" => EncodeStmt::WriteTime {
+                name: name.to_string(),
+                tag: Self::make_tag("UNIVERSAL", ber.tag_number, false),
+                value,
+            },
+            "any" => EncodeStmt::WriteAny {
+                name: name.to_string(),
+                value,
+            },
+            "referenced" | "constructed" => EncodeStmt::WriteReferenced {
+                name: name.to_string(),
+                tag: Self::make_tag(&ber.tag_class, ber.tag_number, ber.constructed),
+                inner_type: ber.referenced_type.clone().unwrap_or_default(),
+                encode_method: "encode_der".to_string(),
+                value,
+            },
+            "choice" => EncodeStmt::WriteChoice {
+                name: name.to_string(),
+                tag: Self::make_tag(&ber.tag_class, ber.tag_number, ber.constructed),
+                inner_type: ber.referenced_type.clone().unwrap_or_default(),
+                encode_method: "encode_der".to_string(),
+                value,
+            },
+            "list" => {
+                let element_info = ber.list_element_ber.as_ref().map(|inner| ListElementEncodeInfo {
+                    encoding: inner.encoding.clone(),
+                    tag_number: inner.tag_number,
+                    string_encoding: inner.string_encoding.clone(),
+                    referenced_type: inner.referenced_type.clone().unwrap_or_default(),
+                }).unwrap_or_default();
+                EncodeStmt::WriteList {
+                    name: name.to_string(),
+                    tag: Self::make_tag(&ber.tag_class, ber.tag_number, ber.constructed),
+                    value,
+                    element_info,
+                }
+            }
+            _ => EncodeStmt::WriteAny { name: name.to_string(), value },
+        };
+        vec![stmt]
+    }
+
+    fn build_decode_stmts(name: &str, ber: &BerFieldInfo) -> Vec<DecodeStmt> {
+        let stmt = match ber.encoding.as_str() {
+            "integer" | "enumerated" => DecodeStmt::ReadInteger { name: name.to_string() },
+            "boolean" => DecodeStmt::ReadBoolean { name: name.to_string() },
+            "string" => DecodeStmt::ReadString {
+                name: name.to_string(),
+                encoding: ber.string_encoding.clone(),
+            },
+            "bytes" => DecodeStmt::ReadBytes { name: name.to_string() },
+            "bit_string" => DecodeStmt::ReadBitString { name: name.to_string() },
+            "oid" => DecodeStmt::ReadOid { name: name.to_string() },
+            "null" => DecodeStmt::ReadNull { name: name.to_string() },
+            "real" => DecodeStmt::ReadReal { name: name.to_string() },
+            "time" => DecodeStmt::ReadTime { name: name.to_string() },
+            "any" => DecodeStmt::ReadAny {
+                name: name.to_string(),
+                reconstruct_tlv: true,
+            },
+            "referenced" | "constructed" => DecodeStmt::ReadReferenced {
+                name: name.to_string(),
+                inner_type: ber.referenced_type.clone().unwrap_or_default(),
+                decode_method: "decode_der".to_string(),
+                reconstruct_tlv: true,
+            },
+            "choice" => DecodeStmt::ReadChoice {
+                name: name.to_string(),
+                inner_type: ber.referenced_type.clone().unwrap_or_default(),
+                decode_method: "decode_der".to_string(),
+                reconstruct_tlv: true,
+            },
+            "list" => {
+                let element_info = ber.list_element_ber.as_ref().map(|inner| ListElementDecodeInfo {
+                    encoding: inner.encoding.clone(),
+                    string_encoding: inner.string_encoding.clone(),
+                    referenced_type: inner.referenced_type.clone().unwrap_or_default(),
+                }).unwrap_or_default();
+                DecodeStmt::ReadList { name: name.to_string(), element_info }
+            }
+            _ => DecodeStmt::ReadAny { name: name.to_string(), reconstruct_tlv: false },
+        };
+        vec![stmt]
+    }
+
+    fn build_choice_encode_stmts(name: &str, ber: &BerFieldInfo) -> Vec<EncodeStmt> {
+        let value = format!("self.{}", name);
+        let inner_tag = Self::make_tag(&ber.inherent_tag_class, ber.inherent_tag_number, ber.constructed);
+        let outer_tag = Self::make_tag(&ber.tag_class, ber.tag_number, true);
+
+        let inner_stmt = match ber.encoding.as_str() {
+            "integer" => EncodeStmt::WriteInteger { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 2, false), value: value.clone() },
+            "enumerated" => EncodeStmt::WriteEnumerated { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 10, false), value: value.clone() },
+            "boolean" => EncodeStmt::WriteBoolean { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 1, false), value: value.clone() },
+            "string" => EncodeStmt::WriteString { name: name.to_string(), tag: inner_tag.clone(), value: value.clone(), encoding: ber.string_encoding.clone() },
+            "bytes" => EncodeStmt::WriteBytes { name: name.to_string(), tag: inner_tag.clone(), value: value.clone(), tlv_method: "write_tlv".to_string() },
+            "bit_string" => EncodeStmt::WriteBitString { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 3, false), value: value.clone() },
+            "oid" => EncodeStmt::WriteOid { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 6, false), value: value.clone() },
+            "null" => EncodeStmt::WriteNull { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 5, false) },
+            "real" => EncodeStmt::WriteReal { name: name.to_string(), tag: Self::make_tag("UNIVERSAL", 9, false), value: value.clone() },
+            "time" => EncodeStmt::WriteTime { name: name.to_string(), tag: inner_tag.clone(), value: value.clone() },
+            "referenced" | "constructed" => EncodeStmt::WriteReferenced { name: name.to_string(), tag: inner_tag.clone(), inner_type: ber.referenced_type.clone().unwrap_or_default(), encode_method: "encode_der".to_string(), value: value.clone() },
+            "choice" => EncodeStmt::WriteChoice { name: name.to_string(), tag: inner_tag.clone(), inner_type: ber.referenced_type.clone().unwrap_or_default(), encode_method: "encode_der".to_string(), value: value.clone() },
+            "list" => {
+                let element_info = ber.list_element_ber.as_ref().map(|inner| ListElementEncodeInfo {
+                    encoding: inner.encoding.clone(),
+                    tag_number: inner.tag_number,
+                    string_encoding: inner.string_encoding.clone(),
+                    referenced_type: inner.referenced_type.clone().unwrap_or_default(),
+                }).unwrap_or_default();
+                EncodeStmt::WriteList { name: name.to_string(), tag: inner_tag.clone(), value: value.clone(), element_info }
+            }
+            _ => EncodeStmt::WriteAny { name: name.to_string(), value: value.clone() },
+        };
+
+        match ber.tagging_mode.as_str() {
+            "explicit" => vec![EncodeStmt::WrapExplicit { outer_tag, inner_name: name.to_string() }],
+            "implicit" => vec![EncodeStmt::WrapImplicit { outer_tag, inner_name: name.to_string(), tag_number: inner_tag.number }],
+            _ => vec![inner_stmt],
+        }
+    }
+
+    fn build_choice_decode_stmts(name: &str, ber: &BerFieldInfo) -> Vec<DecodeStmt> {
+        match ber.encoding.as_str() {
+            "integer" | "enumerated" => vec![DecodeStmt::ReadInteger { name: name.to_string() }],
+            "boolean" => vec![DecodeStmt::ReadBoolean { name: name.to_string() }],
+            "string" => vec![DecodeStmt::ReadString { name: name.to_string(), encoding: ber.string_encoding.clone() }],
+            "bytes" => vec![DecodeStmt::ReadBytes { name: name.to_string() }],
+            "bit_string" => vec![DecodeStmt::ReadBitString { name: name.to_string() }],
+            "oid" => vec![DecodeStmt::ReadOid { name: name.to_string() }],
+            "null" => vec![DecodeStmt::ReadNull { name: name.to_string() }],
+            "real" => vec![DecodeStmt::ReadReal { name: name.to_string() }],
+            "time" => vec![DecodeStmt::ReadTime { name: name.to_string() }],
+            "referenced" | "constructed" => vec![DecodeStmt::ReadReferenced {
+                name: name.to_string(),
+                inner_type: ber.referenced_type.clone().unwrap_or_default(),
+                decode_method: "decode_der".to_string(),
+                reconstruct_tlv: true,
+            }],
+            "choice" => vec![DecodeStmt::ReadChoice {
+                name: name.to_string(),
+                inner_type: ber.referenced_type.clone().unwrap_or_default(),
+                decode_method: "decode_der".to_string(),
+                reconstruct_tlv: true,
+            }],
+            _ => vec![DecodeStmt::ReadAny { name: name.to_string(), reconstruct_tlv: false }],
         }
     }
 }

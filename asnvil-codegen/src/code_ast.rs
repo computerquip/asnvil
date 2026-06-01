@@ -107,9 +107,17 @@ pub enum EncodeStmt {
     WriteAny { name: String, value: String },
     WriteReferenced { name: String, tag: Tag, inner_type: String, encode_method: String, value: String },
     WriteChoice { name: String, tag: Tag, inner_type: String, encode_method: String, value: String },
-    WriteList { name: String, tag: Tag, value: String },
+    WriteList { name: String, tag: Tag, value: String, element_info: ListElementEncodeInfo },
     WrapExplicit { outer_tag: Tag, inner_name: String },
     WrapImplicit { outer_tag: Tag, inner_name: String, tag_number: u32 },
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ListElementEncodeInfo {
+    pub encoding: String,
+    pub tag_number: u32,
+    pub string_encoding: String,
+    pub referenced_type: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,18 +135,10 @@ pub enum DecodeStmt {
     ReadAny { name: String, reconstruct_tlv: bool },
     ReadReferenced { name: String, inner_type: String, decode_method: String, reconstruct_tlv: bool },
     ReadChoice { name: String, inner_type: String, decode_method: String, reconstruct_tlv: bool },
-    ReadList { name: String },
+    ReadList { name: String, element_info: ListElementDecodeInfo },
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct ListElementEncodeInfo {
-    pub encoding: String,
-    pub tag_number: u32,
-    pub string_encoding: String,
-    pub referenced_type: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct ListElementDecodeInfo {
     pub encoding: String,
     pub string_encoding: String,
