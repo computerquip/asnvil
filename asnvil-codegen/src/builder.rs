@@ -1,6 +1,21 @@
 use crate::code_ast::*;
+use crate::code_ast::ChoiceAlternative as CodeChoiceAlt;
 use asnvil_ir::ir::*;
+use asnvil_ir::ir::ChoiceAlternative as IrChoiceAlt;
 use std::collections::HashMap;
+
+fn string_encoding_to_ir(charset: &CharsetType) -> StringEncoding {
+    match charset {
+        CharsetType::UTF8 => StringEncoding::UTF8,
+        CharsetType::Numeric => StringEncoding::Numeric,
+        CharsetType::Printable => StringEncoding::Printable,
+        CharsetType::IA5 => StringEncoding::IA5,
+        CharsetType::Teletex => StringEncoding::Teletex,
+        CharsetType::BMP => StringEncoding::BMP,
+        CharsetType::Universal => StringEncoding::Universal,
+        CharsetType::Videotex | CharsetType::Graphic | CharsetType::Visible | CharsetType::General => StringEncoding::UTF8,
+    }
+}
 
 pub struct CodeAstBuilder {
     types: HashMap<String, AsnType>,
@@ -177,41 +192,39 @@ impl CodeAstBuilder {
                         decls.extend(self.build_inline_decl(resolved, &child_name));
                     }
                 }
-                let alt_fields: Vec<Field> = alternatives
+                let alt_fields: Vec<CodeChoiceAlt> = alternatives
                     .iter()
                     .enumerate()
-                    .map(|(i, a)| {
+                    .map(|(_, a)| {
                         let resolved = self.resolve_type(&a.ty);
                         let ty_ref = if is_inline_type(resolved) {
                             TypeRef::Named(Self::inline_type_name(name, &a.name))
                         } else {
                             self.build_type(&a.ty)
                         };
-                        Field {
+                        CodeChoiceAlt {
                             name: a.name.clone(),
                             ty: ty_ref,
-                            default: None,
-                            optional: true,
-                            doc_comment: None,
                             ber: Some(self.ber_info_for_type(&a.ty)),
-                            order: i,
+                            encode_stmts: Vec::new(),
+                            decode_stmts: Vec::new(),
+                            tagging_mode: "inherent".to_string(),
                         }
                     })
-                    .chain(ext.iter().flat_map(|ea| ea.iter().enumerate().map(|(i, a)| {
+                    .chain(ext.iter().flat_map(|ea| ea.iter().enumerate().map(|(_, a)| {
                         let resolved = self.resolve_type(&a.ty);
                         let ty_ref = if is_inline_type(resolved) {
                             TypeRef::Named(Self::inline_type_name(name, &a.name))
                         } else {
                             self.build_type(&a.ty)
                         };
-                        Field {
+                        CodeChoiceAlt {
                             name: a.name.clone(),
                             ty: ty_ref,
-                            default: None,
-                            optional: true,
-                            doc_comment: None,
                             ber: Some(self.ber_info_for_type(&a.ty)),
-                            order: i,
+                            encode_stmts: Vec::new(),
+                            decode_stmts: Vec::new(),
+                            tagging_mode: "inherent".to_string(),
                         }
                     })))
                     .collect();
@@ -305,6 +318,8 @@ impl CodeAstBuilder {
             default: f.default.as_ref().map(asn_value_to_literal),
             doc_comment: None,
             ber: Some(self.ber_info_for_field(&f.ty, parent_name, &f.name)),
+            encode_stmts: Vec::new(),
+            decode_stmts: Vec::new(),
             order,
         }
     }
@@ -436,7 +451,7 @@ impl CodeAstBuilder {
             }
             AsnType::Choice { alternatives, ext, .. } => {
                 let mut decls = Vec::new();
-                let all_alts: Vec<&ChoiceAlternative> = alternatives.iter().chain(ext.iter().flat_map(|e| e.iter())).collect();
+                let all_alts: Vec<&IrChoiceAlt> = alternatives.iter().chain(ext.iter().flat_map(|e| e.iter())).collect();
                 for a in &all_alts {
                     let resolved = self.resolve_type(&a.ty);
                     if is_inline_type(resolved) {
@@ -445,26 +460,24 @@ impl CodeAstBuilder {
                     }
                 }
 
-                let alt_fields: Vec<Field> = alternatives
+                let alt_fields: Vec<CodeChoiceAlt> = alternatives
                     .iter()
                     .enumerate()
-                    .map(|(i, a)| Field {
+                    .map(|(_, a)| CodeChoiceAlt {
                         name: a.name.clone(),
                         ty: self.build_type(&a.ty),
-                        default: None,
-                        optional: true,
-                        doc_comment: None,
                         ber: Some(self.ber_info_for_type(&a.ty)),
-                        order: i,
+                        encode_stmts: Vec::new(),
+                        decode_stmts: Vec::new(),
+                        tagging_mode: "inherent".to_string(),
                     })
-                    .chain(ext.iter().flat_map(|ea| ea.iter().enumerate().map(|(i, a)| Field {
+                    .chain(ext.iter().flat_map(|ea| ea.iter().enumerate().map(|(_, a)| CodeChoiceAlt {
                         name: a.name.clone(),
                         ty: self.build_type(&a.ty),
-                        default: None,
-                        optional: true,
-                        doc_comment: None,
                         ber: Some(self.ber_info_for_type(&a.ty)),
-                        order: i,
+                        encode_stmts: Vec::new(),
+                        decode_stmts: Vec::new(),
+                        tagging_mode: "inherent".to_string(),
                     })))
                     .collect();
 
@@ -522,49 +535,61 @@ impl CodeAstBuilder {
             AsnType::BitString { .. } => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Named("BitString".to_string()),
+                    target: TypeRef::Builtin(BuiltinType::BitString),
                 }]
             }
             AsnType::OctetString => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Builtin(BuiltinType::Bytes),
+                    target: TypeRef::Builtin(BuiltinType::OctetString),
                 }]
             }
             AsnType::ObjectIdentifier => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Named("ObjectIdentifier".to_string()),
+                    target: TypeRef::Builtin(BuiltinType::ObjectIdentifier),
                 }]
             }
             AsnType::Boolean => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Builtin(BuiltinType::Bool),
+                    target: TypeRef::Builtin(BuiltinType::Boolean),
                 }]
             }
             AsnType::Integer { .. } => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Builtin(BuiltinType::Int { bits: None, signed: true }),
+                    target: TypeRef::Builtin(BuiltinType::Integer),
                 }]
             }
-            AsnType::RestrictedString(_) | AsnType::UnrestrictedString => {
+            AsnType::RestrictedString(charset) => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Builtin(BuiltinType::String),
+                    target: TypeRef::Builtin(BuiltinType::String(string_encoding_to_ir(charset))),
+                }]
+            }
+            AsnType::UnrestrictedString => {
+                vec![Declaration::TypeAlias {
+                    name: assignment.name.clone(),
+                    target: TypeRef::Builtin(BuiltinType::OctetString),
                 }]
             }
             AsnType::Null => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Builtin(BuiltinType::None),
+                    target: TypeRef::Builtin(BuiltinType::Null),
                 }]
             }
-            AsnType::GeneralizedTime | AsnType::UTCTime => {
+            AsnType::GeneralizedTime => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Named("datetime".to_string()),
+                    target: TypeRef::Builtin(BuiltinType::GeneralizedTime),
+                }]
+            }
+            AsnType::UTCTime => {
+                vec![Declaration::TypeAlias {
+                    name: assignment.name.clone(),
+                    target: TypeRef::Builtin(BuiltinType::UTCTime),
                 }]
             }
             AsnType::Tagged { .. } => {
@@ -602,13 +627,13 @@ impl CodeAstBuilder {
             AsnType::Real => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Builtin(BuiltinType::Float),
+                    target: TypeRef::Builtin(BuiltinType::Real),
                 }]
             }
             AsnType::RelativeOid => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: TypeRef::Named("RelativeOid".to_string()),
+                    target: TypeRef::Builtin(BuiltinType::ObjectIdentifier),
                 }]
             }
         }
@@ -636,6 +661,8 @@ impl CodeAstBuilder {
             default: f.default.as_ref().map(asn_value_to_literal),
             doc_comment: None,
             ber: Some(self.ber_info_for_field(&f.ty, parent_name, &f.name)),
+            encode_stmts: Vec::new(),
+            decode_stmts: Vec::new(),
             order: 0,
         }
     }
@@ -979,12 +1006,15 @@ impl CodeAstBuilder {
 
     fn build_type(&self, ty: &AsnType) -> TypeRef {
         match ty {
-            AsnType::Boolean => TypeRef::Builtin(BuiltinType::Bool),
-            AsnType::Integer { .. } => TypeRef::Builtin(BuiltinType::Int { bits: None, signed: true }),
-            AsnType::OctetString => TypeRef::Builtin(BuiltinType::Bytes),
-            AsnType::Null => TypeRef::Builtin(BuiltinType::None),
-            AsnType::RestrictedString(_) | AsnType::UnrestrictedString => {
-                TypeRef::Builtin(BuiltinType::String)
+            AsnType::Boolean => TypeRef::Builtin(BuiltinType::Boolean),
+            AsnType::Integer { .. } => TypeRef::Builtin(BuiltinType::Integer),
+            AsnType::OctetString => TypeRef::Builtin(BuiltinType::OctetString),
+            AsnType::Null => TypeRef::Builtin(BuiltinType::Null),
+            AsnType::RestrictedString(charset) => {
+                TypeRef::Builtin(BuiltinType::String(string_encoding_to_ir(charset)))
+            }
+            AsnType::UnrestrictedString => {
+                TypeRef::Builtin(BuiltinType::OctetString)
             }
             AsnType::SequenceOf { element_type } => {
                 TypeRef::List(Box::new(self.build_type(element_type)))
@@ -992,17 +1022,18 @@ impl CodeAstBuilder {
             AsnType::SetOf { element_type } => {
                 TypeRef::List(Box::new(self.build_type(element_type)))
             }
-            AsnType::BitString { .. } => TypeRef::Named("BitString".to_string()),
-            AsnType::ObjectIdentifier => TypeRef::Named("ObjectIdentifier".to_string()),
-            AsnType::Enumerated { .. } => TypeRef::Builtin(BuiltinType::Int { bits: None, signed: true }),
+            AsnType::BitString { .. } => TypeRef::Builtin(BuiltinType::BitString),
+            AsnType::ObjectIdentifier => TypeRef::Builtin(BuiltinType::ObjectIdentifier),
+            AsnType::Enumerated { .. } => TypeRef::Builtin(BuiltinType::Integer),
             AsnType::ReferencedType { name, .. } => TypeRef::Named(name.clone()),
-            AsnType::GeneralizedTime | AsnType::UTCTime => TypeRef::Named("datetime".to_string()),
-            AsnType::Real => TypeRef::Builtin(BuiltinType::Float),
+            AsnType::GeneralizedTime => TypeRef::Builtin(BuiltinType::GeneralizedTime),
+            AsnType::UTCTime => TypeRef::Builtin(BuiltinType::UTCTime),
+            AsnType::Real => TypeRef::Builtin(BuiltinType::Real),
             AsnType::ConstrainedType { base, .. } => self.build_type(base),
             AsnType::Tagged { inner, .. } => self.build_type(inner),
-            AsnType::OpenType { .. } => TypeRef::Builtin(BuiltinType::Bytes),
+            AsnType::OpenType { .. } => TypeRef::Builtin(BuiltinType::Any),
             AsnType::Any => TypeRef::Builtin(BuiltinType::Any),
-            _ => TypeRef::Named("Any".to_string()),
+            _ => TypeRef::Builtin(BuiltinType::Any),
         }
     }
 }

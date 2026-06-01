@@ -41,7 +41,7 @@ pub enum Declaration {
     },
     Choice {
         name: String,
-        alternatives: Vec<Field>,
+        alternatives: Vec<ChoiceAlternative>,
         doc_comment: Option<String>,
     },
     TypeAlias {
@@ -86,6 +86,66 @@ pub struct ChoiceAltTag {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Tag {
+    pub class: String,
+    pub number: u32,
+    pub constructed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum EncodeStmt {
+    WriteInteger { name: String, tag: Tag, value: String },
+    WriteEnumerated { name: String, tag: Tag, value: String },
+    WriteBoolean { name: String, tag: Tag, value: String },
+    WriteString { name: String, tag: Tag, value: String, encoding: String },
+    WriteBytes { name: String, tag: Tag, value: String, tlv_method: String },
+    WriteBitString { name: String, tag: Tag, value: String },
+    WriteOid { name: String, tag: Tag, value: String },
+    WriteNull { name: String, tag: Tag },
+    WriteReal { name: String, tag: Tag, value: String },
+    WriteTime { name: String, tag: Tag, value: String },
+    WriteAny { name: String, value: String },
+    WriteReferenced { name: String, tag: Tag, inner_type: String, encode_method: String, value: String },
+    WriteChoice { name: String, tag: Tag, inner_type: String, encode_method: String, value: String },
+    WriteList { name: String, tag: Tag, value: String },
+    WrapExplicit { outer_tag: Tag, inner_name: String },
+    WrapImplicit { outer_tag: Tag, inner_name: String, tag_number: u32 },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum DecodeStmt {
+    ReadInteger { name: String },
+    ReadEnumerated { name: String },
+    ReadBoolean { name: String },
+    ReadString { name: String, encoding: String },
+    ReadBytes { name: String },
+    ReadBitString { name: String },
+    ReadOid { name: String },
+    ReadNull { name: String },
+    ReadReal { name: String },
+    ReadTime { name: String },
+    ReadAny { name: String, reconstruct_tlv: bool },
+    ReadReferenced { name: String, inner_type: String, decode_method: String, reconstruct_tlv: bool },
+    ReadChoice { name: String, inner_type: String, decode_method: String, reconstruct_tlv: bool },
+    ReadList { name: String },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListElementEncodeInfo {
+    pub encoding: String,
+    pub tag_number: u32,
+    pub string_encoding: String,
+    pub referenced_type: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListElementDecodeInfo {
+    pub encoding: String,
+    pub string_encoding: String,
+    pub referenced_type: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Field {
     pub name: String,
     pub ty: TypeRef,
@@ -93,7 +153,19 @@ pub struct Field {
     pub optional: bool,
     pub doc_comment: Option<String>,
     pub ber: Option<BerFieldInfo>,
+    pub encode_stmts: Vec<EncodeStmt>,
+    pub decode_stmts: Vec<DecodeStmt>,
     pub order: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChoiceAlternative {
+    pub name: String,
+    pub ty: TypeRef,
+    pub ber: Option<BerFieldInfo>,
+    pub encode_stmts: Vec<EncodeStmt>,
+    pub decode_stmts: Vec<DecodeStmt>,
+    pub tagging_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,13 +189,28 @@ pub enum TypeRef {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub enum StringEncoding {
+    UTF8,
+    Numeric,
+    Printable,
+    IA5,
+    Teletex,
+    BMP,
+    Universal,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub enum BuiltinType {
-    Int { bits: Option<u8>, signed: bool },
-    Bool,
-    String,
-    Bytes,
-    Float,
-    None,
+    Integer,
+    Boolean,
+    String(StringEncoding),
+    OctetString,
+    BitString,
+    ObjectIdentifier,
+    Null,
+    Real,
+    GeneralizedTime,
+    UTCTime,
     Any,
 }
 

@@ -308,12 +308,15 @@ impl LanguageRenderer for PythonRenderer {
     fn render_type(&self, ty: &TypeRef) -> Result<String> {
         match ty {
             TypeRef::Builtin(builtin) => match builtin {
-                BuiltinType::Int { .. } => Ok("int".to_string()),
-                BuiltinType::Bool => Ok("bool".to_string()),
-                BuiltinType::String => Ok("str".to_string()),
-                BuiltinType::Bytes => Ok("bytes".to_string()),
-                BuiltinType::Float => Ok("float".to_string()),
-                BuiltinType::None => Ok("None".to_string()),
+                BuiltinType::Integer => Ok("int".to_string()),
+                BuiltinType::Boolean => Ok("bool".to_string()),
+                BuiltinType::String(_) => Ok("str".to_string()),
+                BuiltinType::OctetString => Ok("bytes".to_string()),
+                BuiltinType::BitString => Ok("BitString".to_string()),
+                BuiltinType::ObjectIdentifier => Ok("ObjectIdentifier".to_string()),
+                BuiltinType::Null => Ok("None".to_string()),
+                BuiltinType::Real => Ok("float".to_string()),
+                BuiltinType::GeneralizedTime | BuiltinType::UTCTime => Ok("datetime".to_string()),
                 BuiltinType::Any => Ok("Any".to_string()),
             },
             TypeRef::Named(name) => Ok(name.clone()),

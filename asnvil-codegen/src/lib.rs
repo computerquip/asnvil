@@ -121,11 +121,11 @@ mod tests {
                         assert_eq!(name, "Person");
                         assert_eq!(fields.len(), 3);
                         assert_eq!(fields[0].name, "id");
-                        assert!(matches!(fields[0].ty, TypeRef::Builtin(BuiltinType::Int { .. })));
+                        assert!(matches!(fields[0].ty, TypeRef::Builtin(BuiltinType::Integer)));
                         assert_eq!(fields[1].name, "name");
-                        assert!(matches!(fields[1].ty, TypeRef::Builtin(BuiltinType::String)));
+                        assert!(matches!(fields[1].ty, TypeRef::Builtin(BuiltinType::String(_))));
                         assert_eq!(fields[2].name, "active");
-                        assert!(matches!(fields[2].ty, TypeRef::Builtin(BuiltinType::Bool)));
+                        assert!(matches!(fields[2].ty, TypeRef::Builtin(BuiltinType::Boolean)));
                     }
                     _ => panic!("expected Struct declaration"),
                 }
