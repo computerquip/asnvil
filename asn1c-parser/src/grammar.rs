@@ -153,10 +153,9 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn definitive_obj_id_components(&mut self, arg: &DefinitiveObjIdComponents<'t>) -> Result<()> {
         let mut components: Vec<ast::OidComponent> = Vec::new();
-        // Pop all components in reverse order (last pushed = last in list)
         let count = 1 + arg.definitive_obj_id_components_list.len();
         for _ in 0..count {
-            let s = self.str_stack.pop_back().unwrap();
+            let s = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
             if let Some(rest) = s.strip_prefix("__oid_name__:") {
                 components.push(ast::OidComponent::Name(rest.to_string()));
             } else if let Some(rest) = s.strip_prefix("__oid_num__:") {
@@ -181,9 +180,9 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn module_identifier(&mut self, arg: &ModuleIdentifier<'t>) -> Result<()> {
-        let name = self.str_stack.pop_back().unwrap();
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let oid = if arg.module_identifier_opt.is_some() {
-            let s = self.str_stack.pop_back().unwrap();
+            let s = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
             if let Some(rest) = s.strip_prefix("__oid__:") {
                 let components: Vec<ast::OidComponent> = rest.split(',')
                     .filter(|s| !s.is_empty())
@@ -300,9 +299,9 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     fn export_list(&mut self, arg: &ExportList<'t>) -> Result<()> {
         let mut symbols: Vec<String> = Vec::new();
         for _ in &arg.export_list_list {
-            symbols.push(self.str_stack.pop_back().unwrap());
+            symbols.push(self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?);
         }
-        symbols.push(self.str_stack.pop_back().unwrap());
+        symbols.push(self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?);
         symbols.reverse();
 
         if symbols.len() == 1 && symbols[0] == "ALL" {
@@ -404,11 +403,11 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     fn symbols_imported(&mut self, arg: &SymbolsImported<'t>) -> Result<()> {
         let mut symbols: Vec<String> = Vec::new();
         for _ in &arg.symbols_imported_list {
-            let s = self.str_stack.pop_back().unwrap();
+            let s = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
             let name = s.strip_prefix("__import_sym__:").unwrap_or(&s).to_string();
             symbols.push(name);
         }
-        let s = self.str_stack.pop_back().unwrap();
+        let s = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let name = s.strip_prefix("__import_sym__:").unwrap_or(&s).to_string();
         symbols.push(name);
         symbols.reverse();
@@ -427,14 +426,14 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     fn import_item(&mut self, arg: &ImportItem<'t>) -> Result<()> {
         // Pop: module_reference first, then the raw Reference pushed by reference() callback,
         // then the symbols_imported list
-        let module_str = self.str_stack.pop_back().unwrap();
+        let module_str = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let module = module_str.strip_prefix("__import_mod__:").unwrap_or(&module_str).to_string();
 
         // The reference() callback also fires for ModuleReference: Reference,
         // leaving a raw reference name on the stack that needs to be consumed
-        let _raw_ref = self.str_stack.pop_back().unwrap();
+        let _raw_ref = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
 
-        let symbols_str = self.str_stack.pop_back().unwrap();
+        let symbols_str = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let symbols: Vec<String> = if let Some(rest) = symbols_str.strip_prefix("__import_list__:") {
             if rest.is_empty() {
                 Vec::new()
@@ -449,7 +448,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             // Check if there's an OID marker on the stack
             if let Some(s) = self.str_stack.back() {
                 if s.starts_with("__oid__:") {
-                    let s = self.str_stack.pop_back().unwrap();
+                    let s = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
                     let rest = s.strip_prefix("__oid__:").unwrap();
                     let components: Vec<ast::OidComponent> = rest.split(',')
                         .filter(|s| !s.is_empty())
@@ -684,7 +683,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn sequence_of_type(&mut self, _arg: &SequenceOfType<'t>) -> Result<()> {
-        let element_type = self.type_stack.pop_back().unwrap();
+        let element_type = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
         let s = element_type.span();
         self.type_stack.push_back(ast::AsnType::SequenceOf {
             element_type: Box::new(element_type),
@@ -694,7 +693,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn set_of_type(&mut self, _arg: &SetOfType<'t>) -> Result<()> {
-        let element_type = self.type_stack.pop_back().unwrap();
+        let element_type = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
         let s = element_type.span();
         self.type_stack.push_back(ast::AsnType::SetOf {
             element_type: Box::new(element_type),
@@ -772,12 +771,11 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn tagged_type(&mut self, arg: &TaggedType<'t>) -> Result<()> {
-        let inner = self.type_stack.pop_back().unwrap();
-        let number = self.bigint_stack.pop_back().unwrap();
+        let inner = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
+        let number = self.bigint_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected BigInt on bigint_stack"))?;
 
         let class = if let Some(ref _opt) = arg.tagged_type_opt {
-            // tag_class callback pushed a marker
-            let s = self.str_stack.pop_back().unwrap();
+            let s = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
             s.strip_prefix("__tag_class__:")
                 .map(|tc| match tc {
                     "Universal" => ast::TagClass::Universal,
@@ -809,7 +807,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn referenced_type(&mut self, arg: &ReferencedType<'t>) -> Result<()> {
-        let name = self.str_stack.pop_back().unwrap();
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         self.type_stack.push_back(ast::AsnType::Referenced {
             name,
             parameters: None,
@@ -819,7 +817,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn named_number(&mut self, arg: &NamedNumber<'t>) -> Result<()> {
-        let name = self.str_stack.pop_back().unwrap();
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let value = match &*arg.named_number_group {
             NamedNumberGroup::NumberLiteral(inner) => {
                 let text = inner.number_literal.number_literal.text();
@@ -832,7 +830,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn named_bit(&mut self, arg: &NamedBit<'t>) -> Result<()> {
-        let name = self.str_stack.pop_back().unwrap();
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let value = match &*arg.named_bit_group {
             NamedBitGroup::NumberLiteral(inner) => {
                 let text = inner.number_literal.number_literal.text();
@@ -845,7 +843,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn enum_item(&mut self, arg: &EnumItem<'t>) -> Result<()> {
-        let name = self.str_stack.pop_back().unwrap();
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         let value = if let Some(ref opt) = arg.enum_item_opt {
             let text = opt.number_literal.number_literal.text();
             Some(text.parse().map_err(|e| anyhow::anyhow!("Invalid enum value: {text}: {e}"))?)
@@ -858,13 +856,13 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn component_type(&mut self, arg: &ComponentType<'t>) -> Result<()> {
         let (optional, default) = match &*arg.component_type_rest {
-            ComponentTypeRest::DEFAULTValue(_inner) => (false, Some(self.value_stack.pop_back().unwrap())),
+            ComponentTypeRest::DEFAULTValue(_inner) => (false, Some(self.value_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnValue on value_stack"))?)),
             ComponentTypeRest::OPTIONAL(_) => (true, None),
             ComponentTypeRest::ComponentTypeRestEmpty(_) => (false, None),
         };
 
-        let ty = self.type_stack.pop_back().unwrap();
-        let name = self.str_stack.pop_back().unwrap();
+        let ty = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
 
         self.component_stack.push_back(ast::ComponentType {
             name,
@@ -876,8 +874,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn named_type(&mut self, _arg: &NamedType<'t>) -> Result<()> {
-        let ty = self.type_stack.pop_back().unwrap();
-        let name = self.str_stack.pop_back().unwrap();
+        let ty = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         self.named_type_stack.push_back(ast::NamedType { name, ty });
         Ok(())
     }
@@ -891,8 +889,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
                 let num: BigInt = text.parse().map_err(|e| anyhow::anyhow!("Invalid value: {text}: {e}"))?;
                 ast::AsnValue::Integer(num)
             }
-            Value::BinaryString(_) => self.value_stack.pop_back().unwrap(),
-            Value::HexString(_) => self.value_stack.pop_back().unwrap(),
+            Value::BinaryString(_) => self.value_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnValue on value_stack"))?,
+            Value::HexString(_) => self.value_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnValue on value_stack"))?,
             Value::CharString(inner) => {
                 let text = inner.char_string.char_string.text();
                 ast::AsnValue::CharString(text[1..text.len() - 1].to_string())
@@ -902,12 +900,12 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
                 ast::AsnValue::Sequence(items)
             }
         Value::Identifier(inner) => {
-            let _ = self.str_stack.pop_back();
+            let _ = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
             ast::AsnValue::Referenced(inner.identifier.identifier.text().to_string())
         }
         Value::NullType(_) => ast::AsnValue::Null,
         Value::Reference(inner) => {
-            let _ = self.str_stack.pop_back();
+            let _ = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
             ast::AsnValue::Referenced(inner.reference.reference.text().to_string())
         }
         };
@@ -918,7 +916,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     fn value_item(&mut self, arg: &ValueItem<'t>) -> Result<()> {
         let named = match arg {
             ValueItem::Identifier(_inner) => {
-                let name = self.str_stack.pop_back().unwrap();
+                let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
                 ast::NamedValue {
                     name: String::new(),
                     value: ast::AsnValue::Referenced(name),
@@ -933,8 +931,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
                 }
             }
             ValueItem::ReferenceColonValue(_inner) => {
-                let name = self.str_stack.pop_back().unwrap();
-                let val = self.value_stack.pop_back().unwrap();
+                let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
+                let val = self.value_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnValue on value_stack"))?;
                 ast::NamedValue { name, value: val }
             }
         };
@@ -943,8 +941,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn type_assignment(&mut self, arg: &TypeAssignment<'t>) -> Result<()> {
-        let ty = self.type_stack.pop_back().unwrap();
-        let name = self.str_stack.pop_back().unwrap();
+        let ty = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         self.assignment_stack.push_back(ast::Assignment::Type(ast::TypeAssignment {
             name,
             parameters: None,
@@ -955,9 +953,9 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn value_assignment(&mut self, arg: &ValueAssignment<'t>) -> Result<()> {
-        let value = self.value_stack.pop_back().unwrap();
-        let ty = self.type_stack.pop_back().unwrap();
-        let name = self.str_stack.pop_back().unwrap();
+        let value = self.value_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnValue on value_stack"))?;
+        let ty = self.type_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected AsnType on type_stack"))?;
+        let name = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
         self.assignment_stack.push_back(ast::Assignment::Value(ast::ValueAssignment {
             name,
             ty,
@@ -1013,8 +1011,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn module(&mut self, arg: &Module<'t>) -> Result<()> {
-        let module_id = self.module_id_stack.pop_back().unwrap();
-        let body = self.module_body_stack.pop_back().unwrap();
+        let module_id = self.module_id_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected ModuleIdentifier on module_id_stack"))?;
+        let body = self.module_body_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected ModuleBody on module_body_stack"))?;
         let module_span = module_id.span;
 
         let tag_default = if arg.module_opt.is_some() {
