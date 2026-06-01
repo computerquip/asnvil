@@ -1,4 +1,4 @@
-use asn1c_parser::ast;
+use asnvil_parser::ast;
 use num_bigint::BigInt;
 use thiserror::Error;
 

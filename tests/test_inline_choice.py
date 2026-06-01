@@ -1,5 +1,5 @@
 from TestModule import Person, PersonContact
-from asn1c_runtime import BerDecoder, DerEncoder, DerDecoder
+from asnvil_runtime import BerDecoder, DerEncoder, DerDecoder
 
 
 def test_person_with_email():

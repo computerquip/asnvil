@@ -9,7 +9,7 @@ import pytest
 
 # ─── Path setup ──────────────────────────────────────────────────────
 
-# Add project root so `from asn1c_runtime` resolves to the symlink
+# Add project root so `from asnvil_runtime` resolves to the symlink
 _project_root = os.path.join(os.path.dirname(__file__), "..")
 _project_root = os.path.normpath(_project_root)
 if _project_root not in sys.path:
@@ -18,14 +18,14 @@ if _project_root not in sys.path:
 # ─── Constants ───────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-RUNTIME_SRC = REPO_ROOT / "asn1c-runtime-python"
+RUNTIME_SRC = REPO_ROOT / "asnvil-runtime-python"
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 
 
 @pytest.fixture(scope="session")
 def runtime_path():
-    """Path to the asn1c-runtime-python source directory."""
+    """Path to the asnvil-runtime-python source directory."""
     return RUNTIME_SRC
 
 
@@ -36,7 +36,7 @@ def compile_asn1():
     Usage:
         def test_something(compile_asn1):
             output_dir = compile_asn1("tests/explicit_choice.asn1")
-            # output_dir has compiled .py files and asn1c_runtime/
+            # output_dir has compiled .py files and asnvil_runtime/
     """
     dirs_to_cleanup = []
 
@@ -45,7 +45,7 @@ def compile_asn1():
         if not asn1_path.is_absolute():
             asn1_path = REPO_ROOT / asn1_path
 
-        tmpdir = tempfile.mkdtemp(prefix="asn1c-test-")
+        tmpdir = tempfile.mkdtemp(prefix="asnvil-test-")
         dirs_to_cleanup.append(tmpdir)
         output_dir = Path(tmpdir) / "output"
         output_dir.mkdir()
@@ -67,7 +67,7 @@ def compile_asn1():
             )
 
         # Copy runtime
-        dest = output_dir / "asn1c_runtime"
+        dest = output_dir / "asnvil_runtime"
         shutil.copytree(RUNTIME_SRC, dest)
 
         return output_dir

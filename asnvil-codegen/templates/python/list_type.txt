@@ -115,7 +115,7 @@ class {{ name }}(list, AsnType):
             _lt = decoder.read_tag()
             _ll = decoder.read_length()
             _lv = decoder.read_bytes(_ll)
-            from asn1c_runtime import BitString
+            from asnvil_runtime import BitString
             items.append(BitString(_lv[1:], _lv[0]))
 {% else if inner.encoding == "oid" %}
             _lt = decoder.read_tag()
@@ -252,7 +252,7 @@ class {{ name }}(list, AsnType):
             _lt = _ld.read_tag()
             _ll = _ld.read_length()
             _lv = _ld.read_bytes(_ll)
-            from asn1c_runtime import BitString
+            from asnvil_runtime import BitString
             items.append(BitString(_lv[1:], _lv[0]))
 {% else if inner.encoding == "oid" %}
             _lt = _ld.read_tag()

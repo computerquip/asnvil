@@ -1,11 +1,11 @@
-"""Unit tests for asn1c Python runtime (ber.py, der.py, types.py, errors.py)."""
+"""Unit tests for asnvil Python runtime (ber.py, der.py, types.py, errors.py)."""
 from __future__ import annotations
 
 import pytest
 
-from asn1c_runtime.ber import BerEncoder, BerDecoder
-from asn1c_runtime.der import DerEncoder, DerDecoder
-from asn1c_runtime.errors import (
+from asnvil_runtime.ber import BerEncoder, BerDecoder
+from asnvil_runtime.der import DerEncoder, DerDecoder
+from asnvil_runtime.errors import (
     AsnError,
     UnexpectedTagError,
     InvalidLengthError,
@@ -14,8 +14,8 @@ from asn1c_runtime.errors import (
     InvalidIntegerEncodingError,
     SetNotCanonicalError,
 )
-from asn1c_runtime.types import BitString, ObjectIdentifier, AsnAny
-from asn1c_runtime import Tag, TagClass
+from asnvil_runtime.types import BitString, ObjectIdentifier, AsnAny
+from asnvil_runtime import Tag, TagClass
 
 
 # ─── BerEncoder tests ───────────────────────────────────────────────

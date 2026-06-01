@@ -136,13 +136,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "asn1c"
+name = "asnvil"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "asn1c-codegen",
- "asn1c-ir",
- "asn1c-parser",
+ "asnvil-codegen",
+ "asnvil-ir",
+ "asnvil-parser",
  "assert_cmd",
  "clap",
  "miette",
@@ -152,12 +152,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "asn1c-codegen"
+name = "asnvil-codegen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "askama",
- "asn1c-ir",
+ "asnvil-ir",
  "miette",
  "num-bigint",
  "serde",
@@ -166,17 +166,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "asn1c-ir"
+name = "asnvil-ir"
 version = "0.1.0"
 dependencies = [
- "asn1c-parser",
+ "asnvil-parser",
  "miette",
  "num-bigint",
  "thiserror",
 ]
 
 [[package]]
-name = "asn1c-parser"
+name = "asnvil-parser"
 version = "0.1.0"
 dependencies = [
  "anyhow",

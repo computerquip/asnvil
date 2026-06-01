@@ -3,16 +3,16 @@ use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
 
-use asn1c_codegen::builder::CodeAstBuilder;
-use asn1c_codegen::python::PythonRenderer;
-use asn1c_codegen::renderer::LanguageRenderer;
-use asn1c_ir::from_ast;
-use asn1c_ir::resolver::Resolver;
-use asn1c_parser::grammar::Grammar;
-use asn1c_parser::parse;
+use asnvil_codegen::builder::CodeAstBuilder;
+use asnvil_codegen::python::PythonRenderer;
+use asnvil_codegen::renderer::LanguageRenderer;
+use asnvil_ir::from_ast;
+use asnvil_ir::resolver::Resolver;
+use asnvil_parser::grammar::Grammar;
+use asnvil_parser::parse;
 
 #[derive(Parser, Debug)]
-#[command(name = "asn1c", version, about = "ASN.1 Compiler", long_about = None)]
+#[command(name = "asnvil", version, about = "ASN.1 Compiler", long_about = None)]
 struct Cli {
     #[arg(help = "ASN.1 module files to compile")]
     input: Vec<PathBuf>,
@@ -134,10 +134,10 @@ fn main() -> Result<()> {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .parent()
                 .unwrap()
-                .join("asn1c-runtime-python")
+                .join("asnvil-runtime-python")
         });
 
-        let dest = out_dir.join("asn1c_runtime");
+        let dest = out_dir.join("asnvil_runtime");
         fs::create_dir_all(&dest)?;
 
         copy_dir(&runtime_dir, &dest)?;

@@ -11,7 +11,7 @@ from LDAPv3 import (
     SearchResultEntry, BindRequest, BindResponse, SearchRequest,
     LDAPMessage, PartialAttributeList,
 )
-from asn1c_runtime import ObjectIdentifier
+from asnvil_runtime import ObjectIdentifier
 
 
 def test_attribute_value_assertion_roundtrip():

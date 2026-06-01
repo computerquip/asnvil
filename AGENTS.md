@@ -1,49 +1,49 @@
-# AGENTS.md — asn1c Project
+# AGENTS.md — asnvil Project
 
 ## Project Overview
 
-**asn1c** is an ASN.1 compiler written in Rust using the Parol v4 parser generator. It parses `.asn1` files (ITU-T X.680–X.683, 2021) and generates source code with encode/decode support in multiple target languages (Python first, Rust/TS/C/Go planned).
+**asnvil** is an ASN.1 compiler written in Rust using the Parol v4 parser generator. It parses `.asn1` files (ITU-T X.680–X.683, 2021) and generates source code with encode/decode support in multiple target languages (Python first, Rust/TS/C/Go planned).
 
 ## Architecture
 
 ```
 ASN.1 source (.asn1)
     ↓
-[asn1c-parser] — Parol LL(k) parser → AST
+[asnvil-parser] — Parol LL(k) parser → AST
     ↓
-[asn1c-ir] — Semantic analyzer → Language-agnostic IR
+[asnvil-ir] — Semantic analyzer → Language-agnostic IR
     ↓
-[asn1c-codegen] — Code AST construction + per-language renderers
+[asnvil-codegen] — Code AST construction + per-language renderers
     ↓
 [Language Renderer] — Target language source (Python first)
     ↓
-[asn1c-runtime-python] — Pure stdlib Python runtime (ships alongside generated code)
+[asnvil-runtime-python] — Pure stdlib Python runtime (ships alongside generated code)
 ```
 
 ## Crates
 
 | Crate | Purpose |
 |---|---|
-| `asn1c` | CLI binary (`asn1c <file.asn1> -o output/`) |
-| `asn1c-parser` | Parol grammar (`asn1.par`), build.rs generation, AST types |
-| `asn1c-ir` | Intermediate representation (resolved types, constraints, values) |
-| `asn1c-codegen` | Code AST builder + Python renderer with **Askama** templates |
-| `asn1c-runtime-python/` | Pure Python runtime (NOT a pip package, ships as directory) |
+| `asnvil` | CLI binary (`asnvil <file.asn1> -o output/`) |
+| `asnvil-parser` | Parol grammar (`asn1.par`), build.rs generation, AST types |
+| `asnvil-ir` | Intermediate representation (resolved types, constraints, values) |
+| `asnvil-codegen` | Code AST builder + Python renderer with **Askama** templates |
+| `asnvil-runtime-python/` | Pure Python runtime (NOT a pip package, ships as directory) |
 
 ## Key Files
 
 | File | What It Is |
 |---|---|
-| `asn1c-parser/src/asn1.par` | Full ASN.1 grammar (172 lines, X.680–X.683) |
-| `asn1c-parser/build.rs` | Parol code generation + inner-attribute stripping |
-| `asn1c-parser/src/lib.rs` | Module includes for generated parser/trait/scanner |
-| `asn1c-parser/src/grammar.rs` | User-defined `Grammar<'t>` implementing `GrammarTrait` |
-| `asn1c-parser/src/ast.rs` | Hand-written AST types for parse tree |
-| `asn1c-ir/src/ir.rs` | IR data structures (AsnModule, AsnType, etc.) |
-| `asn1c-ir/src/resolver.rs` | Type resolution, import/export, circular ref detection |
-| `asn1c-codegen/src/builder.rs` | IR → Code AST transformation |
-| `asn1c-codegen/src/python.rs` | Python renderer with **Askama** derive-based templates |
-| `asn1c-codegen/templates/python/` | **Askama** templates (.txt): struct, choice, enum, type_alias, module_header, list_type |
+| `asnvil-parser/src/asn1.par` | Full ASN.1 grammar (172 lines, X.680–X.683) |
+| `asnvil-parser/build.rs` | Parol code generation + inner-attribute stripping |
+| `asnvil-parser/src/lib.rs` | Module includes for generated parser/trait/scanner |
+| `asnvil-parser/src/grammar.rs` | User-defined `Grammar<'t>` implementing `GrammarTrait` |
+| `asnvil-parser/src/ast.rs` | Hand-written AST types for parse tree |
+| `asnvil-ir/src/ir.rs` | IR data structures (AsnModule, AsnType, etc.) |
+| `asnvil-ir/src/resolver.rs` | Type resolution, import/export, circular ref detection |
+| `asnvil-codegen/src/builder.rs` | IR → Code AST transformation |
+| `asnvil-codegen/src/python.rs` | Python renderer with **Askama** derive-based templates |
+| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): struct, choice, enum, type_alias, module_header, list_type |
 
 ## Critical Parol v4 Integration Notes
 
@@ -75,7 +75,7 @@ See the **parol-parser** skill for the full reference.
 
 ```bash
 cargo build                    # Build all crates
-cargo build -p asn1c-parser    # Build parser only (triggers Parol generation)
+cargo build -p asnvil-parser    # Build parser only (triggers Parol generation)
 cargo run -- -o output/ test.asn1    # Compile an ASN.1 file
 cargo run -- --help            # CLI help
 cargo run --example demo       # Run full pipeline demo (IR → codegen → DER test)
@@ -103,7 +103,7 @@ just test-all                  # Run all tests (Rust + Python + integration)
 
 ### Milestone 2: Core Parser ✅
 - `GrammarTrait` callbacks in `grammar.rs` (939 lines) with stack-based AST construction
-- `asn1c-ir/src/from_ast.rs` converts parser AST → IR
+- `asnvil-ir/src/from_ast.rs` converts parser AST → IR
 - CLI in `main.rs` runs real parse → AST → IR pipeline
 - All 20+ ASN.1 types parsed (Sequence, Set, Choice, Enumerated, BitString, Tagged, etc.)
 
@@ -136,17 +136,17 @@ just test-all                  # Run all tests (Rust + Python + integration)
 ### Milestone 6: Integration Tests + RFC 5912 Support ✅
 
 #### Completed
-- **Grammar fixes** (`asn1c-parser/src/asn1.par`):
+- **Grammar fixes** (`asnvil-parser/src/asn1.par`):
   - `TaggedType` now supports bracket notation `[0]`, `[1]` for context-specific tags
   - `'DEFINED'` added to `IdentifierOrKeyword` keyword list
   - `OpenType` moved before `AnyType` in Type alternatives (resolves ANY/ANY DEFINED BY ambiguity)
-- **Parser fixes** (`asn1c-parser/src/grammar.rs`):
+- **Parser fixes** (`asnvil-parser/src/grammar.rs`):
   - `open_type` callback handles new grammar structure (no lifetime param)
   - `value` callback now pops from `str_stack` for Identifier/Reference cases (fixes DEFAULT value reference pollution)
-- **AST/IR fixes** (`asn1c-ir/src/from_ast.rs`, `asn1c-ir/src/ir.rs`):
+- **AST/IR fixes** (`asnvil-ir/src/from_ast.rs`, `asnvil-ir/src/ir.rs`):
   - `OpenType` variant now has `defined_by: Option<String>` field
   - `TaggedType` with no tag class now maps to `ContextSpecific` (was incorrectly mapping to `Universal`)
-- **Codegen fixes** (`asn1c-codegen/src/builder.rs`, `asn1c-codegen/src/code_ast.rs`):
+- **Codegen fixes** (`asnvil-codegen/src/builder.rs`, `asnvil-codegen/src/code_ast.rs`):
   - `Field` struct has `order: usize` field for tracking original ASN.1 field position
   - SEQUENCE/SET fields are reordered: non-default fields first, default/optional fields last (Python dataclass compatibility)
   - `Declaration::ListType` variant added for SEQUENCE OF / SET OF type alias classes
@@ -154,8 +154,8 @@ just test-all                  # Run all tests (Rust + Python + integration)
   - `CodeAstBuilder` now holds a type map (`HashMap<String, AsnType>`) for resolving `ReferencedType` during BER info generation
   - `resolve_type()` resolves referenced types through the type map with cycle detection
   - `SequenceOf`/`SetOf` BER info now preserves `referenced_type` name when resolving from `ReferencedType`
-- **Template migration**: Migrated from Minijinja to **Askama** v0.16.0 (compile-time templates). Old `.j2` files replaced by `.txt` files in `asn1c-codegen/templates/python/`. Template logic now uses type-safe context structs in `python.rs` with `#[derive(Template)]`.
-- **Resolver fix** (`asn1c-ir/src/resolver.rs`):
+- **Template migration**: Migrated from Minijinja to **Askama** v0.16.0 (compile-time templates). Old `.j2` files replaced by `.txt` files in `asnvil-codegen/templates/python/`. Template logic now uses type-safe context structs in `python.rs` with `#[derive(Template)]`.
+- **Resolver fix** (`asnvil-ir/src/resolver.rs`):
   - SequenceOf/SetOf element types are NOT resolved inline (preserves `ReferencedType` name for codegen)
 
 #### Integration Tests
@@ -183,9 +183,9 @@ just test-all                  # Run all tests (Rust + Python + integration)
 Templates use **Askama** (compile-time, derive-based). See the **`askama`** skill. **The `minijinja` skill is obsolete.**
 
 **Key files:**
-- `asn1c-codegen/src/python.rs` — Python renderer with Askama `#[derive(Template)]` structs
-- `asn1c-codegen/templates/python/` — Askama templates (.txt extension = no escaping)
-- `asn1c-codegen/askama.toml` — Askama configuration
+- `asnvil-codegen/src/python.rs` — Python renderer with Askama `#[derive(Template)]` structs
+- `asnvil-codegen/templates/python/` — Askama templates (.txt extension = no escaping)
+- `asnvil-codegen/askama.toml` — Askama configuration
 
 **Key patterns:**
 - Context structs with `has_*` booleans for optional fields (Askama can't `{% if opt %}`)
@@ -231,7 +231,7 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 
 ## Python Runtime
 
-Located at `asn1c-runtime-python/` — **NOT a pip package**. It ships as a directory copied alongside generated code. Generated Python imports via `from asn1c_runtime import ...`.
+Located at `asnvil-runtime-python/` — **NOT a pip package**. It ships as a directory copied alongside generated code. Generated Python imports via `from asnvil_runtime import ...`.
 
 Files:
 - `__init__.py` — Exports: `AsnType`, `Tag`, `TagClass`, `BerEncoder`, `BerDecoder`, `DerEncoder`, `DerDecoder`, `BitString`, `ObjectIdentifier`
@@ -245,7 +245,7 @@ Requires Python 3.9+ (uses `from __future__ import annotations`).
 ## Generated Python Example
 
 ```python
-from asn1c_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder
+from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder
 from dataclasses import dataclass
 
 @dataclass
@@ -266,42 +266,42 @@ class Person(AsnType):
 
 ### 🔴 Serious Issues
 
-#### asn1c-parser
-- [x] **R1: Broken `{ ValueItems }` collection** — `grammar.rs:815-818`. Values pushed by `value_item` callbacks are discarded; branch creates `Vec::new()`. Any ASN.1 value list silently becomes empty. **Fixed**: Added `named_value_stack` to collect `NamedValue` items; `LBraceValueItemsRBrace` drains it. Also fixed `value_item` to pop identifiers from `str_stack` (was causing downstream parse corruption where field names became type names). Tests added in `asn1c-parser/src/lib.rs`.
+#### asnvil-parser
+- [x] **R1: Broken `{ ValueItems }` collection** — `grammar.rs:815-818`. Values pushed by `value_item` callbacks are discarded; branch creates `Vec::new()`. Any ASN.1 value list silently becomes empty. **Fixed**: Added `named_value_stack` to collect `NamedValue` items; `LBraceValueItemsRBrace` drains it. Also fixed `value_item` to pop identifiers from `str_stack` (was causing downstream parse corruption where field names became type names). Tests added in `asnvil-parser/src/lib.rs`.
 - [x] **R2: Broken `import_symbol` fallback** — `grammar.rs:314`. For keyword variants it does `format!("{:?}", arg.identifier_or_keyword)`, producing debug strings. Import lists corrupted. Match all `IdentifierOrKeyword` variants like `export_symbol` does.
  - [x] **R3: All spans hardcoded to `0..0`** — throughout `grammar.rs`. **Fixed**: All AST nodes now extract real `SourceSpan` from token locations instead of `0..0`. Added `Spanned` impl for `AsnType`.
 - [x] **R4: ~30 `.unwrap()` calls on stack operations** — throughout `grammar.rs`. Any grammar mismatch panics instead of producing a parse error. Replace with `.ok_or_else(|| anyhow!(...))`.
  - [x] **R5: Hex string parsing silently swallows errors** — `grammar.rs:97, 103`. Invalid hex digits become `0` via `unwrap_or(0)`. Should return parse error. **Fixed**: Replaced `.unwrap_or(0)` with `.map_err()` returning `parol_runtime::ParolError::UserError`. Also fixed a latent bug: slice was `text[1..text.len()-1]` which left a trailing `'` in the hex data; corrected to `text[1..text.len()-2]` to strip both `'` and `H` suffix. 3 tests added: valid hex string, odd-length hex string (zero-padding), and invalid hex string (verifies error is returned).
  - [x] **R15: Negative integer encoding broken** — `ber.py:56-64` and `der.py:32-37`. Missing `num_bytes.insert(0, temp & 0xFF)` after the while loop. **Fixed**: Added the missing line to both `ber.py` and `der.py`. Also fixed `DerEncoder.write_boolean` tag class (was APPLICATION, should be UNIVERSAL). 55 runtime tests cover this.
  - [x] **R16: Missing bounds checks in `read_set_elements`** — `der.py:147-165`. Long-form tag parsing does `content[pos]` without bounds check; truncated input raises `IndexError` instead of `TruncatedInputError`. **Fixed**: Added bounds checks before each `content[pos]` access in the tag/length parsing loops.
- - [x] **R17: Integration tests not runnable from repo** — `test_x509_roundtrip.py`, `test_ldap_roundtrip.py`. Hardcoded `/tmp/asn1c-integration-test/` paths and imports from non-existent `.py` files. Tests only work after manual pre-generation. **Fixed**: Created `tests/run_integration.py` self-contained runner that compiles ASN.1, copies runtime, then runs pytest. Removed hardcoded `/tmp/` paths from X.509 and LDAP tests. Moved `test_indefinite_ber.py` to `tests/`. Added `test_any_defined_by.py`. Created pytest fixtures in `tests/conftest.py`.
+ - [x] **R17: Integration tests not runnable from repo** — `test_x509_roundtrip.py`, `test_ldap_roundtrip.py`. Hardcoded `/tmp/asnvil-integration-test/` paths and imports from non-existent `.py` files. Tests only work after manual pre-generation. **Fixed**: Created `tests/run_integration.py` self-contained runner that compiles ASN.1, copies runtime, then runs pytest. Removed hardcoded `/tmp/` paths from X.509 and LDAP tests. Moved `test_indefinite_ber.py` to `tests/`. Added `test_any_defined_by.py`. Created pytest fixtures in `tests/conftest.py`.
  - [x] **R18: No test coverage for negative integers** — no test file exercises encoding/decoding of negative integers. **Fixed**: Covered by 55 runtime tests in `tests/test_runtime.py`.
  - [x] **R41: `IdentifierOrKeyword` doesn't include `Reference`** — `asn1.par:154-170`. Import/export symbols now accept uppercase type names (`Person`, `X509Certificate`). Also fixed R42 `reference()` callback stack pollution: `export_symbol` and `import_symbol` pop the duplicate entry pushed by `reference()` before extracting the name. 2 tests added.
 
-#### asn1c-ir
+#### asnvil-ir
 - [ ] **R6: Silent error suppression in parameter conversion** — `from_ast.rs:101`. `asn_type_to_ir(t).unwrap_or(ir::AsnType::Any)` silently converts malformed parameter types to `Any`.
 - [ ] **R7: Invalid tag number silently becomes 0** — `from_ast.rs:174`. Negative or out-of-range tag numbers silently coerce to tag `0`.
 - [ ] **R8: Enum value defaults to 0 instead of computing sequentially** — `from_ast.rs:209-214`. Missing enum values should be previous value + 1, not always `0`.
 - [ ] **R9: No duplicate type/name validation** — entire crate. Two types with the same name silently coexist; `resolve_type` finds only the first one via `.find()`.
 - [ ] **R10: Import existence not validated** — `resolver.rs:45-76`. A module can import `"NonExistentType"` and pass validation — the symbol is never checked to actually exist in the target module.
 
-#### asn1c-codegen
+#### asnvil-codegen
 - [ ] **R11: SET elements not sorted during `encode_der`** — `struct.txt`. DER requires SET elements in canonical TLV order. Template encodes fields in declaration order, not by encoded byte order. Re-encoding produces different bytes.
 - [ ] **R12: DER time encoding uses `BerEncoder` instead of `DerEncoder`** — `struct.txt:787`. GeneralizedTime/UTCTime fields in `encode_der` use non-canonical BER encoder.
 - [ ] **R13: `list_type.txt` `encode_der` delegates to `encode_ber`** — `list_type.txt:82-83`. SET OF elements should be sorted for DER; this bypasses canonicalization.
 - [ ] **R14: String escaping incomplete** — `python.rs:135`. `ValueLiteral::String` escaping doesn't handle `\n`, `\t`, `\r`, or control characters. Produces invalid Python output.
 
-#### asn1c-runtime-python
-- [x] **R15: Negative integer encoding broken** — Fixed (see asn1c-parser section above)
-- [x] **R16: Missing bounds checks in `read_set_elements`** — Fixed (see asn1c-parser section above)
+#### asnvil-runtime-python
+- [x] **R15: Negative integer encoding broken** — Fixed (see asnvil-parser section above)
+- [x] **R16: Missing bounds checks in `read_set_elements`** — Fixed (see asnvil-parser section above)
 
 #### tests
-- [x] **R17: Integration tests not runnable from repo** — Fixed (see asn1c-parser section above)
-- [x] **R18: No test coverage for negative integers** — Fixed (see asn1c-parser section above)
+- [x] **R17: Integration tests not runnable from repo** — Fixed (see asnvil-parser section above)
+- [x] **R18: No test coverage for negative integers** — Fixed (see asnvil-parser section above)
 
 ### 🟠 Design / Architecture Issues
 
-#### asn1c-parser
+#### asnvil-parser
 - [ ] **R19: OID string marker protocol is fragile** — `grammar.rs:132-191`. OIDs serialized as comma-joined strings with `__oid_name__:`/`__oid_num__:` prefixes. Should use a dedicated stack.
 - [ ] **R20: ASN.1 semantic decision in parser layer** — `grammar.rs:916`. Absent EXPORTS defaults to "ALL" in the parser; should be an IR-layer concern.
 - [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
@@ -309,12 +309,12 @@ class Person(AsnType):
 - [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
  - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. The generic `reference()` callback fires for **every** `Reference` token, pushing raw text. When a more specific callback (e.g., `module_reference`, `open_type`) handles the same non-terminal, two entries end up on the stack. Fixed as part of R41: `export_symbol` and `import_symbol` now pop the duplicate entry pushed by `reference()` before extracting the name.
 
-#### asn1c-ir
+#### asnvil-ir
 - [ ] **R24: `ConversionError` and `IrError` disconnected** — two separate error types with no `From` impl. Pipeline error handling is verbose and inconsistent.
 - [ ] **R25: ObjectClass/Object/ObjectSet assignments silently dropped** — `from_ast.rs:37`. Wildcard match with no diagnostic.
 - [ ] **R26: ~60 lines of duplicated field resolution logic** — `resolver.rs:132-194`. Sequence, Set, and Choice resolution arms are nearly identical.
 
-#### asn1c-codegen
+#### asnvil-codegen
 - [ ] **R27: Massive template duplication** — `struct.txt` (2014 lines), `choice.txt` (1576 lines). Four nearly-identical method blocks per template. ~5000+ lines of duplicated logic. Root cause of most consistency bugs.
 - [ ] **R28: Stringly-typed encoding enum** — `BerFieldInfo.encoding` uses raw strings. Typos silently fall through to wrong encoding paths.
 - [ ] **R29: `thiserror` dependency declared but never used** — `Cargo.toml:8`.
@@ -323,7 +323,7 @@ class Person(AsnType):
 
 #### CLI
 - [ ] **R32: `--encoding` argument parsed but never used** — `main.rs:27`. Generated code always includes both BER and DER methods regardless.
-- [ ] **R33: `miette` and `num-bigint` dependencies declared but unused** — `asn1c/Cargo.toml`.
+- [ ] **R33: `miette` and `num-bigint` dependencies declared but unused** — `asnvil/Cargo.toml`.
 - [ ] **R34: `copy_dir` reimplementation** — `main.rs:153-166`. Doesn't handle symlinks or permissions.
 
 ### 🟡 Minor Issues

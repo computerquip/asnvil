@@ -5,7 +5,7 @@ pub mod python;
 
 #[cfg(test)]
 mod tests {
-    use asn1c_ir::ir::{
+    use asnvil_ir::ir::{
         self, AsnModule, AsnType, SequenceField, TypeAssignment, EnumItem,
         Exports, TagDefault, ChoiceAlternative,
     };

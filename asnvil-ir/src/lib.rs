@@ -21,17 +21,17 @@ mod tests {
     // ─── Helper: build AST module from assignments ────────────────────
     fn make_ast_module(
         name: &str,
-        assignments: Vec<asn1c_parser::ast::Assignment>,
-    ) -> asn1c_parser::ast::Module {
-        asn1c_parser::ast::Module {
-            identifier: asn1c_parser::ast::ModuleIdentifier {
+        assignments: Vec<asnvil_parser::ast::Assignment>,
+    ) -> asnvil_parser::ast::Module {
+        asnvil_parser::ast::Module {
+            identifier: asnvil_parser::ast::ModuleIdentifier {
                 name: name.to_string(),
                 oid: None,
                 span: span(),
             },
             tag_default: None,
             ext_default: false,
-            body: asn1c_parser::ast::ModuleBody {
+            body: asnvil_parser::ast::ModuleBody {
                 exports: None,
                 imports: vec![],
                 assignments,
@@ -63,23 +63,23 @@ mod tests {
     }
 
     // ─── Helper: make a primitive AST type ────────────────────────────
-    fn ast_integer() -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::Integer { named_numbers: None, span: span() }
+    fn ast_integer() -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::Integer { named_numbers: None, span: span() }
     }
 
-    fn ast_boolean() -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::Boolean { span: span() }
+    fn ast_boolean() -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::Boolean { span: span() }
     }
 
-    fn ast_string() -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::RestrictedString {
-            charset: asn1c_parser::ast::CharsetType::UTF8,
+    fn ast_string() -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::RestrictedString {
+            charset: asnvil_parser::ast::CharsetType::UTF8,
             span: span(),
         }
     }
 
-    fn ast_tagged(number: i64, inner: asn1c_parser::ast::AsnType) -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::Tagged {
+    fn ast_tagged(number: i64, inner: asnvil_parser::ast::AsnType) -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::Tagged {
             class: None,
             number: BigInt::from(number),
             implicit: Some(false),
@@ -88,15 +88,15 @@ mod tests {
         }
     }
 
-    fn ast_enum_item(name: &str, value: Option<i64>) -> asn1c_parser::ast::EnumItem {
-        asn1c_parser::ast::EnumItem {
+    fn ast_enum_item(name: &str, value: Option<i64>) -> asnvil_parser::ast::EnumItem {
+        asnvil_parser::ast::EnumItem {
             name: name.to_string(),
             value: value.map(BigInt::from),
         }
     }
 
-    fn ast_enumerated(items: Vec<asn1c_parser::ast::EnumItem>) -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::Enumerated {
+    fn ast_enumerated(items: Vec<asnvil_parser::ast::EnumItem>) -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::Enumerated {
             items,
             extensible: false,
             ext_items: vec![],
@@ -104,16 +104,16 @@ mod tests {
         }
     }
 
-    fn ast_import(symbols: Vec<&str>, module: &str) -> asn1c_parser::ast::Import {
-        asn1c_parser::ast::Import {
+    fn ast_import(symbols: Vec<&str>, module: &str) -> asnvil_parser::ast::Import {
+        asnvil_parser::ast::Import {
             symbols: symbols.into_iter().map(String::from).collect(),
             module: module.to_string(),
             module_oid: None,
         }
     }
 
-    fn ast_component(name: &str, ty: asn1c_parser::ast::AsnType) -> asn1c_parser::ast::ComponentType {
-        asn1c_parser::ast::ComponentType {
+    fn ast_component(name: &str, ty: asnvil_parser::ast::AsnType) -> asnvil_parser::ast::ComponentType {
+        asnvil_parser::ast::ComponentType {
             name: name.to_string(),
             ty,
             optional: false,
@@ -121,8 +121,8 @@ mod tests {
         }
     }
 
-    fn ast_sequence(fields: Vec<asn1c_parser::ast::ComponentType>) -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::Sequence {
+    fn ast_sequence(fields: Vec<asnvil_parser::ast::ComponentType>) -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::Sequence {
             fields,
             extensible: false,
             ext_fields: vec![],
@@ -130,15 +130,15 @@ mod tests {
         }
     }
 
-    fn ast_named_type(name: &str, ty: asn1c_parser::ast::AsnType) -> asn1c_parser::ast::NamedType {
-        asn1c_parser::ast::NamedType {
+    fn ast_named_type(name: &str, ty: asnvil_parser::ast::AsnType) -> asnvil_parser::ast::NamedType {
+        asnvil_parser::ast::NamedType {
             name: name.to_string(),
             ty,
         }
     }
 
-    fn ast_choice(alternatives: Vec<asn1c_parser::ast::NamedType>) -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::Choice {
+    fn ast_choice(alternatives: Vec<asnvil_parser::ast::NamedType>) -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::Choice {
             alternatives,
             extensible: false,
             ext_alternatives: vec![],
@@ -146,8 +146,8 @@ mod tests {
         }
     }
 
-    fn ast_sequence_of(element: asn1c_parser::ast::AsnType) -> asn1c_parser::ast::AsnType {
-        asn1c_parser::ast::AsnType::SequenceOf {
+    fn ast_sequence_of(element: asnvil_parser::ast::AsnType) -> asnvil_parser::ast::AsnType {
+        asnvil_parser::ast::AsnType::SequenceOf {
             element_type: Box::new(element),
             span: span(),
         }
@@ -163,7 +163,7 @@ mod tests {
             ast_component("active", ast_boolean()),
         ];
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "Person".to_string(),
                 parameters: None,
                 ty: ast_sequence(fields),
@@ -196,7 +196,7 @@ mod tests {
             ast_named_type("strValue", ast_string()),
         ];
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "MyChoice".to_string(),
                 parameters: None,
                 ty: ast_choice(alternatives),
@@ -225,7 +225,7 @@ mod tests {
             ast_enum_item("blue", Some(3)),
         ];
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "Color".to_string(),
                 parameters: None,
                 ty: ast_enumerated(items),
@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn test_convert_sequence_of() {
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "IntList".to_string(),
                 parameters: None,
                 ty: ast_sequence_of(ast_integer()),
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn test_convert_tagged() {
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "TaggedInt".to_string(),
                 parameters: None,
                 ty: ast_tagged(5, ast_integer()),
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn test_convert_boolean() {
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "Flag".to_string(),
                 parameters: None,
                 ty: ast_boolean(),
@@ -312,7 +312,7 @@ mod tests {
             ast_enum_item("second", None),
         ];
         let ast_mod = make_ast_module("TestMod", vec![
-            asn1c_parser::ast::Assignment::Type(asn1c_parser::ast::TypeAssignment {
+            asnvil_parser::ast::Assignment::Type(asnvil_parser::ast::TypeAssignment {
                 name: "Status".to_string(),
                 parameters: None,
                 ty: ast_enumerated(items),

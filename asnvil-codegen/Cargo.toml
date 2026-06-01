@@ -1,10 +1,10 @@
 [package]
-name = "asn1c-codegen"
+name = "asnvil-codegen"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-asn1c-ir = { path = "../asn1c-ir" }
+asnvil-ir = { path = "../asnvil-ir" }
 thiserror.workspace = true
 miette.workspace = true
 askama = { version = "0.16", features = ["config"] }

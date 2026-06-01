@@ -12,7 +12,7 @@ from PKIX1Explicit import (
     CertificateList, Extension, Extensions,
     AttributeTypeAndValue, RelativeDistinguishedName, RDNSequence,
 )
-from asn1c_runtime import ObjectIdentifier, BitString
+from asnvil_runtime import ObjectIdentifier, BitString
 from datetime import datetime
 
 

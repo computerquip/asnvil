@@ -1,4 +1,4 @@
-# asn1c — ASN.1 Compiler
+# asnvil — ASN.1 Compiler
 
 An ASN.1 compiler written in Rust using the [Parol v4](https://github.com/jsinger67/parol) parser generator. It parses `.asn1` files (ITU-T X.680–X.683, 2021) and generates source code with BER/DER encode/decode support, starting with Python.
 
@@ -38,16 +38,16 @@ ASN.1 source (.asn1)
 
 | Crate | What It Does |
 |---|---|
-| `asn1c` | CLI binary with `clap` argument parsing |
-| `asn1c-parser` | Parol grammar (`.par`), build.rs, AST types |
-| `asn1c-ir` | IR data structures + type resolver |
-| `asn1c-codegen` | IR → Code AST → Python renderer with Askama templates |
-| `asn1c-runtime-python` | Pure Python stdlib-only runtime (shipped as directory, not a pip package) |
+| `asnvil` | CLI binary with `clap` argument parsing |
+| `asnvil-parser` | Parol grammar (`.par`), build.rs, AST types |
+| `asnvil-ir` | IR data structures + type resolver |
+| `asnvil-codegen` | IR → Code AST → Python renderer with Askama templates |
+| `asnvil-runtime-python` | Pure Python stdlib-only runtime (shipped as directory, not a pip package) |
 
 ## CLI Options
 
 ```
-asn1c [OPTIONS] [INPUT]...
+asnvil [OPTIONS] [INPUT]...
 
 Arguments:
   [INPUT]...  ASN.1 module files to compile
@@ -69,10 +69,10 @@ Options:
 
 | Layer | Tests | Status |
 |---|---|---|
-| asn1c-parser | 9 Rust unit tests | ✅ |
-| asn1c-ir | 14 Rust unit tests | ✅ |
-| asn1c-codegen | 12 Rust unit tests | ✅ |
-| asn1c (CLI) | 13 Rust unit tests | ✅ |
+| asnvil-parser | 9 Rust unit tests | ✅ |
+| asnvil-ir | 14 Rust unit tests | ✅ |
+| asnvil-codegen | 12 Rust unit tests | ✅ |
+| asnvil (CLI) | 13 Rust unit tests | ✅ |
 | Python runtime | 55 unit tests | ✅ |
 | Integration | 5 suites, 41 roundtrip tests | ✅ |
 
@@ -89,7 +89,7 @@ just test-all           # Everything
 
 ## Python Runtime
 
-Located at `asn1c-runtime-python/` — ships as a directory alongside generated code. Generated Python imports via `from asn1c_runtime import ...`.
+Located at `asnvil-runtime-python/` — ships as a directory alongside generated code. Generated Python imports via `from asnvil_runtime import ...`.
 
 ### Implemented
 
@@ -106,7 +106,7 @@ Located at `asn1c-runtime-python/` — ships as a directory alongside generated 
 ### Runtime API
 
 ```python
-from asn1c_runtime import (
+from asnvil_runtime import (
     AsnType, Tag, TagClass,
     BerEncoder, BerDecoder,
     DerEncoder, DerDecoder,
@@ -130,7 +130,7 @@ value = dec.read_integer() # 42
 
 ```bash
 cargo build                     # Build all crates
-cargo build -p asn1c-parser     # Build parser (triggers Parol generation)
+cargo build -p asnvil-parser     # Build parser (triggers Parol generation)
 cargo run -- -o output/ test.asn1  # Compile an ASN.1 file
 just test-all                   # Run all tests
 cargo run -- --help             # CLI help

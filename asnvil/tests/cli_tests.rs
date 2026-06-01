@@ -15,7 +15,7 @@ fn make_test_asn1() -> &'static str {
 
 #[test]
 fn test_cli_help() {
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg("--help");
     cmd.assert()
         .success()
@@ -24,14 +24,14 @@ fn test_cli_help() {
 
 #[test]
 fn test_cli_version() {
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg("--version");
     cmd.assert().success();
 }
 
 #[test]
 fn test_cli_no_input() {
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("No input files specified"));
@@ -39,7 +39,7 @@ fn test_cli_no_input() {
 
 #[test]
 fn test_cli_invalid_file() {
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg("nonexistent.asn1");
     cmd.assert()
         .failure()
@@ -52,7 +52,7 @@ fn test_cli_compile_valid() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(temp.path());
     cmd.assert().success();
 
@@ -70,7 +70,7 @@ fn test_cli_compile_invalid_syntax() {
     let input = temp.path().join("bad.asn1");
     fs::write(&input, "INVALID ASN.1 GARBAGE @#$%").unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(temp.path());
     cmd.assert().failure();
 }
@@ -84,7 +84,7 @@ fn test_cli_output_directory_created() {
     let out_dir = temp.path().join("nested").join("output");
     assert!(!out_dir.exists());
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(&out_dir);
     cmd.assert().success();
 
@@ -98,7 +98,7 @@ fn test_cli_unsupported_language() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(temp.path()).arg("--lang").arg("rust");
     cmd.assert()
         .failure()
@@ -111,7 +111,7 @@ fn test_cli_verbose() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(temp.path()).arg("--verbose");
     cmd.assert()
         .success()
@@ -124,7 +124,7 @@ fn test_cli_quiet() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(temp.path()).arg("--quiet");
     cmd.assert()
         .success()
@@ -137,7 +137,7 @@ fn test_cli_print_ir() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("--print-ir");
     cmd.assert()
         .success()
@@ -150,7 +150,7 @@ fn test_cli_print_ast() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("--print-ast");
     cmd.assert().success();
 }
@@ -161,11 +161,11 @@ fn test_cli_emit_runtime() {
     let input = temp.path().join("test.asn1");
     fs::write(&input, make_test_asn1()).unwrap();
 
-    let mut cmd = Command::cargo_bin("asn1c").unwrap();
+    let mut cmd = Command::cargo_bin("asnvil").unwrap();
     cmd.arg(&input).arg("-o").arg(temp.path()).arg("--emit-runtime");
     cmd.assert().success();
 
-    let runtime = temp.path().join("asn1c_runtime");
+    let runtime = temp.path().join("asnvil_runtime");
     assert!(runtime.exists());
     assert!(runtime.join("__init__.py").exists());
     assert!(runtime.join("ber.py").exists());

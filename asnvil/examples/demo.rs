@@ -2,13 +2,13 @@ use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
-use asn1c_codegen::builder::CodeAstBuilder;
-use asn1c_codegen::python::PythonRenderer;
-use asn1c_codegen::renderer::LanguageRenderer;
-use asn1c_ir::ir::*;
+use asnvil_codegen::builder::CodeAstBuilder;
+use asnvil_codegen::python::PythonRenderer;
+use asnvil_codegen::renderer::LanguageRenderer;
+use asnvil_ir::ir::*;
 
 fn main() -> Result<()> {
-    let out_dir = Path::new("/tmp/asn1c-demo");
+    let out_dir = Path::new("/tmp/asnvil-demo");
     fs::create_dir_all(out_dir)?;
 
     // Build an IR module with actual types
@@ -77,19 +77,19 @@ fn main() -> Result<()> {
     println!("Generated: {}/demo_module.py", out_dir.display());
 
     // Copy runtime
-    let runtime_src = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("asn1c-runtime-python");
-    let runtime_dst = out_dir.join("asn1c_runtime");
+    let runtime_src = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("asnvil-runtime-python");
+    let runtime_dst = out_dir.join("asnvil_runtime");
     copy_dir(&runtime_src, &runtime_dst)?;
-    println!("Copied runtime to: {}/asn1c_runtime", out_dir.display());
+    println!("Copied runtime to: {}/asnvil_runtime", out_dir.display());
 
     // Write a Python test script that uses the runtime to encode/decode DER
     let test_script = r#"
 import sys
 sys.path.insert(0, '.')
 
-from asn1c_runtime import BerEncoder, BerDecoder, Tag, TagClass
-from asn1c_runtime.der import DerEncoder, DerDecoder
-from asn1c_runtime.errors import AsnError, NonMinimalLengthError
+from asnvil_runtime import BerEncoder, BerDecoder, Tag, TagClass
+from asnvil_runtime.der import DerEncoder, DerDecoder
+from asnvil_runtime.errors import AsnError, NonMinimalLengthError
 from dataclasses import dataclass
 from typing import Optional
 

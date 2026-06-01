@@ -334,7 +334,7 @@ impl LanguageRenderer for PythonRenderer {
 
     fn runtime_imports(&self) -> Vec<String> {
         vec![
-            "from asn1c_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, AsnError".to_string(),
+            "from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, AsnError".to_string(),
             "from dataclasses import dataclass, field".to_string(),
             "from typing import Optional".to_string(),
         ]

@@ -1,10 +1,15 @@
 [package]
-name = "asn1c-ir"
+name = "asnvil-parser"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-asn1c-parser = { path = "../asn1c-parser" }
+parol_runtime.workspace = true
+scnr2 = "0.5"
 thiserror.workspace = true
 miette.workspace = true
 num-bigint.workspace = true
+anyhow.workspace = true
+
+[build-dependencies]
+parol.workspace = true

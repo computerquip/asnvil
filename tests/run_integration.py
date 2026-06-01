@@ -15,7 +15,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = REPO_ROOT / "tests"
 INTEGRATION_DIR = TESTS_DIR / "integration"
-RUNTIME_SRC = REPO_ROOT / "asn1c-runtime-python"
+RUNTIME_SRC = REPO_ROOT / "asnvil-runtime-python"
 
 # Specs and their corresponding test files
 TEST_SPECS: list[tuple[Path, Path]] = [
@@ -47,8 +47,8 @@ def compile_asn1(asn1_path: Path, output_dir: Path) -> None:
 
 
 def copy_runtime(output_dir: Path) -> None:
-    """Copy asn1c-runtime-python/ to <output_dir>/asn1c_runtime/."""
-    dest = output_dir / "asn1c_runtime"
+    """Copy asnvil-runtime-python/ to <output_dir>/asnvil_runtime/."""
+    dest = output_dir / "asnvil_runtime"
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(RUNTIME_SRC, dest)
@@ -88,7 +88,7 @@ def main() -> None:
         print(f"Testing: {asn1_path.name} -> {test_file.name}")
         print(f"{'=' * 60}")
 
-        with tempfile.TemporaryDirectory(prefix="asn1c-test-") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="asnvil-test-") as tmpdir:
             output_dir = Path(tmpdir) / "output"
             output_dir.mkdir()
 

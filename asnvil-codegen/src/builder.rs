@@ -1,5 +1,5 @@
 use crate::code_ast::*;
-use asn1c_ir::ir::*;
+use asnvil_ir::ir::*;
 use std::collections::HashMap;
 
 pub struct CodeAstBuilder {
@@ -158,7 +158,7 @@ impl CodeAstBuilder {
             name: module.name.clone(),
             imports: vec![],
             declarations,
-            doc_comment: Some(format!("Generated from {}.asn1 by asn1c.", module.name)),
+            doc_comment: Some(format!("Generated from {}.asn1 by asnvil.", module.name)),
         }
     }
 

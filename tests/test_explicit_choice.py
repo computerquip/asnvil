@@ -1,5 +1,5 @@
 """Roundtrip tests for explicitly tagged CHOICE alternatives."""
-from asn1c_runtime import DerEncoder, DerDecoder
+from asnvil_runtime import DerEncoder, DerDecoder
 from TestModule import Person, Department, Entity, Container, MixedChoice
 
 def test_entity_person_roundtrip():

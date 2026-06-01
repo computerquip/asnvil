@@ -1,6 +1,6 @@
 """Roundtrip tests for ANY DEFINED BY fields."""
 from TestModule import Container, MessageType
-from asn1c_runtime import DerDecoder, TagClass
+from asnvil_runtime import DerDecoder, TagClass
 
 
 def _encode_integer(value: int) -> bytes:

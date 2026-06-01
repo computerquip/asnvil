@@ -1,6 +1,6 @@
-"""Generated from PKIX1Explicit.asn1 by asn1c."""
+"""Generated from PKIX1Explicit.asn1 by asnvil."""
 from __future__ import annotations
-from asn1c_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, BitString, ObjectIdentifier, AsnError, InvalidLengthError
+from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, BitString, ObjectIdentifier, AsnError, InvalidLengthError
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum, IntEnum
