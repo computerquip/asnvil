@@ -90,6 +90,18 @@ just test-all                  # Run all tests (Rust + Python + integration)
 
 - **Fix warnings at the source** — Never suppress or work around compiler/clippy warnings. Understand the warning and fix the actual code. No `#[allow(...)]` unless the warning is from generated code (e.g. Parol output).
 
+## Testing
+
+**Always run tests through the Justfile** for consistency:
+```bash
+just test-rust          # 48 Rust unit tests
+just test-python        # 55 Python runtime tests
+just test-integration   # 5 integration suites (41 tests)
+just test-all           # Everything
+```
+
+**How runtime imports work:** `conftest.py` uses importlib to load `asnvil-runtime-python/` as the `asnvil_runtime` package. No symlink is needed — Python can't import directories with hyphens, so the conftest manually registers the module. Do not create `asnvil_runtime` symlinks.
+
 ## Current Status
 
 ### Milestone 1: Skeleton ✅
