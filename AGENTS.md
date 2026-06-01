@@ -275,9 +275,9 @@ class Person(AsnType):
 - [x] **R1: Broken `{ ValueItems }` collection** — `grammar.rs:815-818`. Values pushed by `value_item` callbacks are discarded; branch creates `Vec::new()`. Any ASN.1 value list silently becomes empty. **Fixed**: Added `named_value_stack` to collect `NamedValue` items; `LBraceValueItemsRBrace` drains it. Also fixed `value_item` to pop identifiers from `str_stack` (was causing downstream parse corruption where field names became type names). Tests added in `asn1c-parser/src/lib.rs`.
 - [x] **R2: Broken `import_symbol` fallback** — `grammar.rs:314`. For keyword variants it does `format!("{:?}", arg.identifier_or_keyword)`, producing debug strings. Import lists corrupted. Match all `IdentifierOrKeyword` variants like `export_symbol` does.
 - [ ] **R3: All spans hardcoded to `0..0`** — throughout `grammar.rs`. Every AST node uses `SourceSpan::from(0..0)`. Real `Token<'t>.location()` data is available but never used. All error messages point to line 1, column 0.
-- [ ] **R4: ~30 `.unwrap()` calls on stack operations** — throughout `grammar.rs`. Any grammar mismatch panics instead of producing a parse error. Replace with `.ok_or_else(|| anyhow!(...))`.
-- [ ] **R5: Hex string parsing silently swallows errors** — `grammar.rs:97, 103`. Invalid hex digits become `0` via `unwrap_or(0)`. Should return parse error.
-- [ ] **R41: `IdentifierOrKeyword` doesn't include `Reference`** — `asn1.par:154-170`. Import/export symbols only accept lowercase `Identifier` (`/[a-z].../`) or ~75 keyword literals. Real ASN.1 type names (uppercase, like `Person`, `X509Certificate`) are `Reference` tokens (`/[A-Z].../`) and **cannot appear in import/export positions**. `IdentifierOrKeyword` needs `Reference` as an alternative.
+- [x] **R4: ~30 `.unwrap()` calls on stack operations** — throughout `grammar.rs`. Any grammar mismatch panics instead of producing a parse error. Replace with `.ok_or_else(|| anyhow!(...))`.
+ - [x] **R5: Hex string parsing silently swallows errors** — `grammar.rs:97, 103`. Invalid hex digits become `0` via `unwrap_or(0)`. Should return parse error. **Fixed**: Replaced `.unwrap_or(0)` with `.map_err()` returning `parol_runtime::ParolError::UserError`. Also fixed a latent bug: slice was `text[1..text.len()-1]` which left a trailing `'` in the hex data; corrected to `text[1..text.len()-2]` to strip both `'` and `H` suffix. 3 tests added: valid hex string, odd-length hex string (zero-padding), and invalid hex string (verifies error is returned).
+ - [x] **R41: `IdentifierOrKeyword` doesn't include `Reference`** — `asn1.par:154-170`. Import/export symbols now accept uppercase type names (`Person`, `X509Certificate`). Also fixed R42 `reference()` callback stack pollution: `export_symbol` and `import_symbol` pop the duplicate entry pushed by `reference()` before extracting the name. 2 tests added.
 
 #### asn1c-ir
 - [ ] **R6: Silent error suppression in parameter conversion** — `from_ast.rs:101`. `asn_type_to_ir(t).unwrap_or(ir::AsnType::Any)` silently converts malformed parameter types to `Any`.
@@ -308,7 +308,7 @@ class Person(AsnType):
 - [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
 - [ ] **R22: No constraint parsing** — `asn1.par`. Grammar has no constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` cannot be parsed.
 - [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
-- [ ] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. The generic `reference()` callback fires for **every** `Reference` token, pushing raw text. When a more specific callback (e.g., `module_reference`, `open_type`) handles the same non-terminal, two entries end up on the stack. Downstream callbacks like `import_item()` accumulated dead code (shadowed variables) to silently consume duplicates. Fix: either don't push in `reference()`, or use dedicated stacks per domain.
+ - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. The generic `reference()` callback fires for **every** `Reference` token, pushing raw text. When a more specific callback (e.g., `module_reference`, `open_type`) handles the same non-terminal, two entries end up on the stack. Fixed as part of R41: `export_symbol` and `import_symbol` now pop the duplicate entry pushed by `reference()` before extracting the name.
 
 #### asn1c-ir
 - [ ] **R24: `ConversionError` and `IrError` disconnected** — two separate error types with no `From` impl. Pipeline error handling is verbose and inconsistent.
@@ -371,6 +371,8 @@ class Person(AsnType):
   - Code AST: `BerFieldInfo` has `defined_by: Option<String>`
   - Builder: propagates `defined_by` through `ber_info_for_type()`
   - Template: "any" encoding generates bytes type with full TLV encode/decode
+- **R3 Fixed: Spans** — All AST nodes now extract real `SourceSpan` from token locations instead of `0..0`. Added `Spanned` impl for `AsnType`.
+- **R4 Fixed: Stack `.unwrap()` panics** — All ~37 stack `pop_back().unwrap()` calls replaced with `.ok_or_else(|| anyhow::anyhow!(...))?`. Parser stack underflows now produce descriptive error messages instead of panicking.
 - **Total: 48 roundtrip tests + 9 indefinite BER tests passing**
 
 **Known gaps:**

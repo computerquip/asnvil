@@ -20,7 +20,7 @@ pub mod error;
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{AsnType, AsnValue, Assignment, Module};
+    use crate::ast::{AsnType, AsnValue, Assignment, ExportSymbols, Module};
     use crate::grammar::Grammar;
     use crate::parse;
 
@@ -194,5 +194,131 @@ END;
         assert_eq!(import.symbols.len(), 3);
         assert_eq!(import.symbols, &["INTEGER", "SEQUENCE", "OCTET"]);
         assert_eq!(import.module, "SpecModule");
+    }
+
+    #[test]
+    fn test_valid_hex_string_value() {
+        // R5: Hex strings should parse correctly with valid hex digits.
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyOctet OCTET STRING ::= 'DEADBEEF'H
+END;
+"#;
+        let ast = parse_source(source);
+        let assignment = ast
+            .body
+            .assignments
+            .iter()
+            .find(|a| {
+                if let Assignment::Value(va) = a {
+                    va.name == "MyOctet"
+                } else {
+                    false
+                }
+            })
+            .expect("should have MyOctet assignment");
+
+        let value = match assignment {
+            Assignment::Value(va) => &va.value,
+            _ => unreachable!(),
+        };
+
+        match value {
+            AsnValue::HexString(bytes) => {
+                assert_eq!(bytes, &[0xDE, 0xAD, 0xBE, 0xEF]);
+            }
+            other => panic!("expected HexString, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_odd_length_hex_string_value() {
+        // R5: Odd-length hex strings should be zero-padded and parse correctly.
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyOctet OCTET STRING ::= 'ABC'H
+END;
+"#;
+        let ast = parse_source(source);
+        let assignment = ast
+            .body
+            .assignments
+            .iter()
+            .find(|a| {
+                if let Assignment::Value(va) = a {
+                    va.name == "MyOctet"
+                } else {
+                    false
+                }
+            })
+            .expect("should have MyOctet assignment");
+
+        let value = match assignment {
+            Assignment::Value(va) => &va.value,
+            _ => unreachable!(),
+        };
+
+        match value {
+            AsnValue::HexString(bytes) => {
+                assert_eq!(bytes, &[0x0A, 0xBC]);
+            }
+            other => panic!("expected HexString, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_invalid_hex_string_value() {
+        // R5: Invalid hex digits should produce a parse error, not silently become 0.
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    my-octet-value OCTET STRING ::= 'GHIJ'H
+END;
+"#;
+        let mut grammar = crate::grammar::Grammar::new();
+        let result = parse(
+            source,
+            std::path::Path::new("test.asn1"),
+            &mut grammar,
+        );
+        assert!(result.is_err(), "invalid hex string should produce a parse error");
+    }
+
+    #[test]
+    fn test_import_reference_type_name() {
+        // R41: Import symbols must accept Reference (uppercase type names like Person).
+        // Before: only Identifier (lowercase) and keywords were accepted.
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    IMPORTS Person, X509Certificate FROM OtherModule;
+    MyType ::= BOOLEAN
+END;
+"#;
+        let ast = parse_source(source);
+        assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
+        let import = &ast.body.imports[0];
+        assert_eq!(import.symbols.len(), 2);
+        assert_eq!(import.symbols, &["Person", "X509Certificate"]);
+        assert_eq!(import.module, "OtherModule");
+    }
+
+    #[test]
+    fn test_export_reference_type_name() {
+        // R41: Export symbols must accept Reference (uppercase type names).
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    EXPORTS Person, Certificate;
+    Person ::= SEQUENCE { name IA5String }
+    Certificate ::= OCTET STRING
+END;
+"#;
+        let ast = parse_source(source);
+        let exports = ast.body.exports.as_ref().expect("should have EXPORTS");
+        match &exports.symbols {
+            ExportSymbols::Symbols(symbols) => {
+                assert_eq!(symbols.len(), 2);
+                assert_eq!(symbols, &["Person", "Certificate"]);
+            }
+            other => panic!("expected Symbols variant, got {:?}", other),
+        }
     }
 }

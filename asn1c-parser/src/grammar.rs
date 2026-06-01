@@ -99,19 +99,22 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn hex_string(&mut self, arg: &HexString<'t>) -> Result<()> {
         let text = arg.hex_string.text();
-        let hex = &text[1..text.len() - 1];
-        let bytes = if hex.len() % 2 == 0 {
-            (0..hex.len())
-                .step_by(2)
-                .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0))
-                .collect()
+        let hex = &text[1..text.len() - 2];
+        let hex_data = if hex.len() % 2 == 0 {
+            hex.to_string()
         } else {
-            let padded = format!("0{}", hex);
-            (0..padded.len())
-                .step_by(2)
-                .map(|i| u8::from_str_radix(&padded[i..i + 2], 16).unwrap_or(0))
-                .collect()
+            format!("0{}", hex)
         };
+        let mut bytes = Vec::with_capacity(hex_data.len() / 2);
+        for i in (0..hex_data.len()).step_by(2) {
+            let byte = u8::from_str_radix(&hex_data[i..i + 2], 16)
+                .map_err(|e| parol_runtime::ParolError::UserError(anyhow::anyhow!(
+                    "Invalid hex string '{}': {}",
+                    hex_data,
+                    e
+                )))?;
+            bytes.push(byte);
+        }
         self.value_stack.push_back(ast::AsnValue::HexString(bytes));
         Ok(())
     }
@@ -214,6 +217,11 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn export_symbol(&mut self, arg: &ExportSymbol<'t>) -> Result<()> {
         let name = match &*arg.identifier_or_keyword {
+            IdentifierOrKeyword::Reference(inner) => {
+                // The reference() callback already pushed the raw name, so pop it first
+                let _raw_ref = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
+                inner.reference.reference.text().to_string()
+            }
             IdentifierOrKeyword::Identifier(inner) => inner.identifier.identifier.text().to_string(),
             IdentifierOrKeyword::ALL(inner) => inner.a_l_l.text().to_string(),
             IdentifierOrKeyword::ABSENT(inner) => inner.a_b_s_e_n_t.text().to_string(),
@@ -318,6 +326,11 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn import_symbol(&mut self, arg: &ImportSymbol<'t>) -> Result<()> {
         let name = match &*arg.identifier_or_keyword {
+            IdentifierOrKeyword::Reference(inner) => {
+                // The reference() callback already pushed the raw name, so pop it first
+                let _raw_ref = self.str_stack.pop_back().ok_or_else(|| anyhow::anyhow!("Parser stack underflow: expected string on str_stack"))?;
+                inner.reference.reference.text().to_string()
+            }
             IdentifierOrKeyword::Identifier(inner) => inner.identifier.identifier.text().to_string(),
             IdentifierOrKeyword::ALL(inner) => inner.a_l_l.text().to_string(),
             IdentifierOrKeyword::ABSENT(inner) => inner.a_b_s_e_n_t.text().to_string(),

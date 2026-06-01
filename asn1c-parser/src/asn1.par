@@ -152,6 +152,7 @@ ValueItems: ValueItem {','^ ValueItem};
 ValueItem: Identifier | NumberLiteral | Reference ':' Value;
 
 IdentifierOrKeyword:
+    Reference |
     Identifier |
     'ALL' | 'ABSENT' | 'ANY' | 'APPLICATION' | 'AUTOMATIC' |
     'BEGIN' | 'BIT' | 'BMPString' | 'BOOLEAN' | 'BY' |
