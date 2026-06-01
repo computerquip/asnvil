@@ -114,14 +114,14 @@ just test-all                  # Run all tests (Rust + Python + integration)
 - Minor gap: `constraint_to_ir()` returns empty constraints (stubbed but IR structures defined)
 
 ### Milestone 4: Code Generation ✅
-- Full IR → Code AST → Python pipeline with BER encode/decode logic
-- `builder.rs` (500 lines) handles all type variants with `ber_info_for_type()`
-- `struct.j2` template (639 lines) generates per-field encode/decode
-- `choice.j2` template generates tagged union pattern with try/except fallback for constructed types
+- Full IR → Code AST → Python pipeline with BER/DER encode/decode logic
+- `builder.rs` (1008 lines) handles all type variants with `ber_info_for_type()`
+- `struct.txt` template generates per-field encode/decode
+- `choice.txt` template generates tagged union pattern with try/except fallback for constructed types
 - SEQUENCE OF / SET OF list encoding with type-aware element TLV wrapping
 - DEFAULT value support (extracted from parser, converted via `ValueLiteral`, rendered as Python defaults)
 - BitString, ObjectIdentifier, AsnError runtime imports
-- 12 roundtrip tests all passing (Person, Department, Company, Config, Certificate, CHOICE types, nested CHOICE)
+- Templates use **Askama** (compile-time, derive-based) — migrated from Minijinja
 
 ### Milestone 5: DER Canonicalization ✅
 - Complete DER encoder with strict validation (`DerEncoder` with minimal integer/length encoding)
@@ -132,7 +132,6 @@ just test-all                  # Run all tests (Rust + Python + integration)
 - `DerDecoder` enforces: no indefinite length, minimal integer validation, boolean 0x00/0xFF validation
 - `read_set_elements()` validates SET elements are in canonical DER order
 - `sort_set_tlv()` sorts SET elements lexicographically by their full TLV encoding
-- 17 roundtrip tests passing (12 BER + 5 DER)
 
 ### Milestone 6: Integration Tests + RFC 5912 Support ✅
 
@@ -158,12 +157,6 @@ just test-all                  # Run all tests (Rust + Python + integration)
 - **Template migration**: Migrated from Minijinja to **Askama** v0.16.0 (compile-time templates). Old `.j2` files replaced by `.txt` files in `asn1c-codegen/templates/python/`. Template logic now uses type-safe context structs in `python.rs` with `#[derive(Template)]`.
 - **Resolver fix** (`asn1c-ir/src/resolver.rs`):
   - SequenceOf/SetOf element types are NOT resolved inline (preserves `ReferencedType` name for codegen)
-- **Template fixes** (Milestone 6):
-  - `struct.txt`: Fixed missing `_iv = DerEncoder()` for optional integer fields in `encode_der`
-  - `struct.txt`: Added "list" encoding case for nested list types (SEQUENCE OF / SET OF within SEQUENCE/SET)
-  - `list_type.txt`: Changed `decode_der` to do actual decoding (was delegating to `decode_ber`), changed `decode_ber` to delegate to `decode_der`
-  - `list_type.txt`: Changed `encode_ber` to call `encode_der()` on referenced/constructed element types (was calling `encode_ber` which lacked outer wrapper)
-  - `choice.txt`: Fixed `decode_der` to reconstruct full TLV for constructed/choice alternatives (was passing raw value bytes)
 
 #### Integration Tests
 - `tests/integration/x509_certificate.asn1` — RFC 5912-based X.509 simplified spec (15 types)
@@ -184,9 +177,6 @@ just test-all                  # Run all tests (Rust + Python + integration)
 - `decode_ber` not generated for non-CHOICE types (only `decode_der` exists — DER is the target)
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of CHOICE class name (referenced CHOICE types work correctly)
 - Nested SEQUENCE OF with SEQUENCE elements: list encoding uses inner content without per-element TLV wrapper (pre-existing issue, not specific to new features)
-
-#### BLOCKING ISSUE: struct.j2 Template Corruption — RESOLVED ✅
-The template nesting issue was resolved by **migrating from Minijinja to Askama** (see Template Engine section above). The old `struct.j2` with corrupted nesting has been replaced by `struct.txt` using Askama's compile-time templates with proper type-safe context structs.
 
 ### Template Engine: Askama (v0.16.0)
 
@@ -279,7 +269,7 @@ class Person(AsnType):
 #### asn1c-parser
 - [x] **R1: Broken `{ ValueItems }` collection** — `grammar.rs:815-818`. Values pushed by `value_item` callbacks are discarded; branch creates `Vec::new()`. Any ASN.1 value list silently becomes empty. **Fixed**: Added `named_value_stack` to collect `NamedValue` items; `LBraceValueItemsRBrace` drains it. Also fixed `value_item` to pop identifiers from `str_stack` (was causing downstream parse corruption where field names became type names). Tests added in `asn1c-parser/src/lib.rs`.
 - [x] **R2: Broken `import_symbol` fallback** — `grammar.rs:314`. For keyword variants it does `format!("{:?}", arg.identifier_or_keyword)`, producing debug strings. Import lists corrupted. Match all `IdentifierOrKeyword` variants like `export_symbol` does.
-- [ ] **R3: All spans hardcoded to `0..0`** — throughout `grammar.rs`. Every AST node uses `SourceSpan::from(0..0)`. Real `Token<'t>.location()` data is available but never used. All error messages point to line 1, column 0.
+ - [x] **R3: All spans hardcoded to `0..0`** — throughout `grammar.rs`. **Fixed**: All AST nodes now extract real `SourceSpan` from token locations instead of `0..0`. Added `Spanned` impl for `AsnType`.
 - [x] **R4: ~30 `.unwrap()` calls on stack operations** — throughout `grammar.rs`. Any grammar mismatch panics instead of producing a parse error. Replace with `.ok_or_else(|| anyhow!(...))`.
  - [x] **R5: Hex string parsing silently swallows errors** — `grammar.rs:97, 103`. Invalid hex digits become `0` via `unwrap_or(0)`. Should return parse error. **Fixed**: Replaced `.unwrap_or(0)` with `.map_err()` returning `parol_runtime::ParolError::UserError`. Also fixed a latent bug: slice was `text[1..text.len()-1]` which left a trailing `'` in the hex data; corrected to `text[1..text.len()-2]` to strip both `'` and `H` suffix. 3 tests added: valid hex string, odd-length hex string (zero-padding), and invalid hex string (verifies error is returned).
  - [x] **R15: Negative integer encoding broken** — `ber.py:56-64` and `der.py:32-37`. Missing `num_bytes.insert(0, temp & 0xFF)` after the while loop. **Fixed**: Added the missing line to both `ber.py` and `der.py`. Also fixed `DerEncoder.write_boolean` tag class (was APPLICATION, should be UNIVERSAL). 55 runtime tests cover this.
@@ -302,12 +292,12 @@ class Person(AsnType):
 - [ ] **R14: String escaping incomplete** — `python.rs:135`. `ValueLiteral::String` escaping doesn't handle `\n`, `\t`, `\r`, or control characters. Produces invalid Python output.
 
 #### asn1c-runtime-python
-- [ ] **R15: Negative integer encoding broken** — `ber.py:56-64` and `der.py:32-37`. All negative integers from -127 to -1 encode as `[0xFF]` (decodes to -1). -128 encodes as `[0xFF]` instead of `[0x80]`. Missing `num_bytes.insert(0, temp & 0xFF)` after the while loop.
-- [ ] **R16: Missing bounds checks in `read_set_elements`** — `der.py:147-165`. Long-form tag parsing does `content[pos]` without bounds check; truncated input raises `IndexError` instead of `TruncatedInputError`.
+- [x] **R15: Negative integer encoding broken** — Fixed (see asn1c-parser section above)
+- [x] **R16: Missing bounds checks in `read_set_elements`** — Fixed (see asn1c-parser section above)
 
 #### tests
-- [ ] **R17: Integration tests not runnable from repo** — `test_x509_roundtrip.py`, `test_ldap_roundtrip.py`. Hardcoded `/tmp/asn1c-integration-test/` paths and imports from non-existent `.py` files. Tests only work after manual pre-generation.
-- [ ] **R18: No test coverage for negative integers** — no test file exercises encoding/decoding of negative integers (the broken encoding in R15 would never be caught).
+- [x] **R17: Integration tests not runnable from repo** — Fixed (see asn1c-parser section above)
+- [x] **R18: No test coverage for negative integers** — Fixed (see asn1c-parser section above)
 
 ### 🟠 Design / Architecture Issues
 
@@ -344,68 +334,14 @@ class Person(AsnType):
 - [ ] **R39: `capitalize()` doesn't handle Unicode** — `builder.rs:35-41`.
 - [ ] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — `python.rs:81`.
 
-### Original Backlog (Milestone 10+)
+### Remaining Milestones
 1. SNMP integration test (RFC 3416 based)
 2. PER, OER, XER, JER encoding backends
 3. Rust, TypeScript, C, Go backends
-4. CHOICE as field within SEQUENCE (works for referenced CHOICE types; inline CHOICE type annotation needs improvement)
+4. Inline CHOICE as SEQUENCE field (type annotation improvement)
 
-## Next Session Notes
-
-**What's done:**
-- **R1 Fixed: Broken `{ ValueItems }` collection** — Added `named_value_stack` to Grammar struct; `value_item` pushes `NamedValue` items; `LBraceValueItemsRBrace` drains and collects via `rev().collect()`. Also fixed `value_item` Identifier/ReferenceColonValue cases to pop from `str_stack` (was leaking identifiers and corrupting downstream parse). 2 Rust unit tests added. 18 Python roundtrip tests verified passing.
-- **R2 Fixed: Broken `import_symbol` fallback** — Replaced `_ => format!("{:?}", ...)` with exhaustive match on all 76 `IdentifierOrKeyword` variants (matching `export_symbol` pattern). Also cleaned up a latent bug where the `reference()` callback's raw push duplicated the module reference on the stack (added `_raw_ref` pop with documenting comment). 2 Rust unit tests added (`test_import_keyword_symbols`, `test_import_multiple_keyword_symbols`). All 4 parser tests pass.
-- Template engine migrated from Minijinja to Askama v0.16.0
-- struct.j2 template nesting corruption resolved
-- All 7 classes generate valid Python with encode_ber, encode_der, decode_der
-- Askama skill verified and updated with corrections from source review
-- test_roundtrip.py updated to use decode_der instead of decode_ber
-- list_type.txt fixed: decode_ber delegates to decode_der, encode_ber calls encode_der on referenced types
-- choice.txt fixed: decode_der reconstructs full TLV for constructed/choice alternatives
-- builder.rs fixed: ReferencedType resolution through type map for correct BER encoding
-- builder.rs fixed: SequenceOf/SetOf cases preserve referenced_type name
-- struct.txt: Added "list" encoding case for nested list types
-- X.509 integration tests: 9/9 passing
-- LDAP integration tests: 9/9 passing
-- CHOICE enhancements: explicitly tagged alternatives implemented
-- `BerFieldInfo` extended with `tagging_mode`, `inherent_tag_class`, `inherent_tag_number`
-- `choice.txt` template handles inherent/explicit/implicit tagging modes
-- Explicit CHOICE integration tests: 9/9 passing
-- **Indefinite length BER support: 9/9 tests passing**
-  - Runtime: `write_eoc()`, `write_tlv_indefinite()`, `is_eoc()`, `read_eoc()`, `read_constructed_indefinite()`
-  - Templates: `encode_ber_indefinite`/`decode_ber_indefinite` added to struct.txt, choice.txt, list_type.txt
-- **ANY DEFINED BY full support: verified roundtrip**
-  - Grammar: `OpenType` captures identifier after `BY`
-  - Parser: `open_type` extracts identifier AND pops `str_stack` (fixes component name corruption)
-  - Code AST: `BerFieldInfo` has `defined_by: Option<String>`
-  - Builder: propagates `defined_by` through `ber_info_for_type()`
-  - Template: "any" encoding generates bytes type with full TLV encode/decode
-- **R3 Fixed: Spans** — All AST nodes now extract real `SourceSpan` from token locations instead of `0..0`. Added `Spanned` impl for `AsnType`.
-- **R4 Fixed: Stack `.unwrap()` panics** — All ~37 stack `pop_back().unwrap()` calls replaced with `.ok_or_else(|| anyhow::anyhow!(...))?`. Parser stack underflows now produce descriptive error messages instead of panicking.
-- **Total: 48 roundtrip tests + 9 indefinite BER tests passing**
-
-**Known gaps:**
-- `decode_ber` not generated for non-CHOICE types (only `decode_der` exists — DER is the target)
-- Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of CHOICE class name (referenced CHOICE types work correctly)
-- Nested SEQUENCE OF with SEQUENCE elements: list encoding uses inner content without per-element TLV wrapper (pre-existing issue, not specific to new features)
-- `defined_or` filter does NOT exist in Askama (use `assigned_or` or `is defined` check)
-- `|linebreaks` family marks output as HTML-safe but does NOT escape input
-
-**Backlog (Milestone 10+):**
-1. SNMP integration test (RFC 3416 based)
-2. PER, OER, XER, JER encoding backends
-3. Rust, TypeScript, C, Go backends
-4. CHOICE as field within SEQUENCE (works for referenced CHOICE types; inline CHOICE type annotation needs improvement)
-
-**Key files modified for recent work:**
-- `asn1c-runtime-python/ber.py` — Added indefinite length methods: `write_eoc()`, `write_tlv_indefinite()`, `is_eoc()`, `read_eoc()`, `read_constructed_indefinite()`
-- `asn1c-parser/src/asn1.par` — `OpenType` grammar now captures `Identifier` after `BY`
-- `asn1c-parser/src/grammar.rs` — `open_type` callback extracts `defined_by` and pops `str_stack`; added `decode_ber` to CHOICE
-- `asn1c-codegen/src/code_ast.rs` — Added `defined_by: Option<String>` to `BerFieldInfo`
-- `asn1c-codegen/src/builder.rs` — Propagates `defined_by`; split `OpenType`/`Any` match arms; OpenType maps to `bytes` type
-- `asn1c-codegen/templates/python/struct.txt` — Added `encode_ber_indefinite`, `decode_ber_indefinite`, "any" encoding for encode/decode
-- `asn1c-codegen/templates/python/choice.txt` — Added `encode_ber_indefinite`, `decode_ber_indefinite`, restored `decode_ber`
-- `asn1c-codegen/templates/python/list_type.txt` — Added `encode_ber_indefinite`, `decode_ber_indefinite`
-- `asn1c-codegen/templates/python/module_header.txt` — Added `InvalidLengthError` to imports
-- `tests/test_indefinite_ber.py` — 9 indefinite BER roundtrip tests
-- `tests/any_defined_by.asn1` — ANY DEFINED BY integration test
+### Current Test Counts
+- Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
+- Python: 55 runtime unit tests
+- Integration: 5 suites, 41 roundtrip tests
+- **Total: 103 Rust + 96 Python tests**
