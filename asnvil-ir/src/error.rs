@@ -21,22 +21,6 @@ pub enum IrError {
     #[diagnostic(code(asnvil::ir::unexported_symbol))]
     UnexportedSymbol(String, String),
 
-    #[error("Constraint violation: {0}")]
-    #[diagnostic(code(asnvil::ir::constraint_violation))]
-    ConstraintViolation(String),
-
-    #[error("Value type mismatch: expected {expected}, got {actual}")]
-    #[diagnostic(code(asnvil::ir::value_type_mismatch))]
-    ValueTypeMismatch { expected: String, actual: String },
-
-    #[error("Invalid tag specification: {0}")]
-    #[diagnostic(code(asnvil::ir::invalid_tag))]
-    InvalidTag(String),
-
-    #[error("Extension marker error: {0}")]
-    #[diagnostic(code(asnvil::ir::extension_error))]
-    ExtensionError(String),
-
     #[error("Imported symbol '{0}' not found in module '{1}' (imported by '{2}')")]
     #[diagnostic(code(asnvil::ir::imported_symbol_not_found))]
     ImportedSymbolNotFound(String, String, String),

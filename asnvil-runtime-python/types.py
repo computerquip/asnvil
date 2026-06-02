@@ -100,3 +100,13 @@ class AsnAny:
         self.tag_class = tag_class
         self.number = number
         self.content = content
+
+    def __eq__(self, other):
+        if isinstance(other, AsnAny):
+            return (self.tag_class == other.tag_class
+                    and self.number == other.number
+                    and self.content == other.content)
+        return False
+
+    def __repr__(self):
+        return f"AsnAny(tag_class={self.tag_class}, number={self.number}, content={self.content!r})"
