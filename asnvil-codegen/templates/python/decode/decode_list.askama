@@ -1,4 +1,0 @@
-{{ indent }}_{{ name }}_ld = {{ decoder_type }}(_fd)
-{{ indent }}_{{ name }} = []
-{{ indent }}while not _{{ name }}_ld.at_end():
-{{ element_decode }}

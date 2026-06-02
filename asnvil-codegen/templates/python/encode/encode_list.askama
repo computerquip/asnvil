@@ -1,8 +1,0 @@
-{{ indent }}_le = {{ encoder }}()
-{{ indent }}_lc = bytearray()
-{{ indent }}for _li in {{ value }}:
-{{ element_encode }}
-{{ indent }}_le.write_tag(TagClass.UNIVERSAL, {{ tag_number }}, True)
-{{ indent }}_le.write_length(len(_lc))
-{{ indent }}_le.write_bytes(_lc)
-{{ indent }}{{ target }}.extend(_le.finish())
