@@ -3,5 +3,5 @@ class {{ name }}({{ repr }}):
     """{{ doc_comment }}"""
 {% endif %}
 {% for variant in variants %}
-    {{ variant.name }} = {% if variant.has_value %}{{ variant.value }}{% else %}{{ loop.index0 }}{% endif %}
+    {{ variant.name }} = {{ variant.value }}
 {% endfor %}

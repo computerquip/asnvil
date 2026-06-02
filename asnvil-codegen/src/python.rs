@@ -29,7 +29,6 @@ struct TypeAliasTemplate<'a> {
 #[derive(Clone)]
 struct VariantContext<'a> {
     name: &'a str,
-    has_value: bool,
     value: i64,
 }
 
@@ -135,11 +134,13 @@ impl LanguageRenderer for PythonRenderer {
                 self.render_struct(name, fields, annotations, doc_comment.as_deref().unwrap_or(""))
             }
             Declaration::Enum { name, variants, repr, doc_comment } => {
+                let mut next_value = 0i64;
                 let rendered_variants: Vec<_> = variants.iter().map(|v| {
+                    let value = v.value.unwrap_or(next_value);
+                    next_value = value + 1;
                     VariantContext {
                         name: &v.name,
-                        has_value: v.value.is_some(),
-                        value: v.value.unwrap_or(0),
+                        value,
                     }
                 }).collect();
                 let repr_str = match repr {
