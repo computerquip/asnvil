@@ -1,0 +1,6 @@
+{{ indent }}_te = {{ encoder }}()
+{{ indent }}_tb = {{ value }}.strftime('%Y%m%d%H%M%SZ').encode('ascii')
+{{ indent }}_te.write_tag(TagClass.UNIVERSAL, {{ tag_number }}, False)
+{{ indent }}_te.write_length(len(_tb))
+{{ indent }}_te.write_bytes(_tb)
+{{ indent }}{{ target }}.extend(_te.finish())

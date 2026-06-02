@@ -1,0 +1,3 @@
+{{ indent }}_be = {{ encoder }}()
+{{ indent }}_be.{{ tlv_method }}(TagClass.UNIVERSAL, {{ tag_number }}, {{ value }})
+{{ indent }}{{ target }}.extend(_be.finish())

@@ -4,14 +4,14 @@ use anyhow::{bail, Result};
 use askama::Template;
 
 #[derive(Template)]
-#[template(path = "python/module_header.txt")]
+#[template(path = "python/module_header.askama")]
 struct ModuleTemplate<'a> {
     declarations: &'a str,
     doc_comment: &'a str,
 }
 
 #[derive(Template)]
-#[template(path = "python/enum.txt")]
+#[template(path = "python/enum.askama")]
 struct EnumTemplate<'a> {
     name: &'a str,
     variants: Vec<VariantContext<'a>>,
@@ -20,7 +20,7 @@ struct EnumTemplate<'a> {
 }
 
 #[derive(Template)]
-#[template(path = "python/type_alias.txt")]
+#[template(path = "python/type_alias.askama")]
 struct TypeAliasTemplate<'a> {
     name: &'a str,
     target: String,
@@ -31,6 +31,48 @@ struct VariantContext<'a> {
     name: &'a str,
     has_value: bool,
     value: i64,
+}
+
+macro_rules! askama_struct {
+    ($name:ident, $path:expr, $($field:ident: $ty:ty),+ $(,)?) => {
+        #[derive(Template)]
+        #[template(path = $path)]
+        struct $name<'a> {
+            $($field: $ty),+
+        }
+    };
+}
+
+// ── Encode templates (leaf types only) ────────────────────────────────────────
+askama_struct!(EncodeInteger, "python/encode/encode_integer.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeEnumerated, "python/encode/encode_enumerated.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeBoolean, "python/encode/encode_boolean.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeString, "python/encode/encode_string.askama", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, string_encoding: &'a str, target: &'a str);
+askama_struct!(EncodeBytes, "python/encode/encode_bytes.askama", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, tlv_method: &'a str, target: &'a str);
+askama_struct!(EncodeBitString, "python/encode/encode_bit_string.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeOid, "python/encode/encode_oid.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeNull, "python/encode/encode_null.askama", indent: &'a str, encoder: &'a str, target: &'a str);
+askama_struct!(EncodeReal, "python/encode/encode_real.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeTime, "python/encode/encode_time.askama", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, target: &'a str);
+askama_struct!(EncodeAny, "python/encode/encode_any.askama", indent: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeReferenced, "python/encode/encode_referenced.askama", indent: &'a str, value: &'a str, encode_method: &'a str, target: &'a str);
+
+// ── Decode templates (leaf types only) ────────────────────────────────────────
+askama_struct!(DecodeInteger, "python/decode/decode_integer.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeBoolean, "python/decode/decode_boolean.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeString, "python/decode/decode_string.askama", indent: &'a str, name: &'a str, encoding: &'a str);
+askama_struct!(DecodeBytes, "python/decode/decode_bytes.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeBitString, "python/decode/decode_bit_string.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeOid, "python/decode/decode_oid.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeNull, "python/decode/decode_null.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeReal, "python/decode/decode_real.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeTime, "python/decode/decode_time.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeAny, "python/decode/decode_any.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeAnyTlv, "python/decode/decode_any_tlv.askama", indent: &'a str, name: &'a str);
+askama_struct!(DecodeReferencedTlv, "python/decode/decode_referenced_tlv.askama", indent: &'a str, name: &'a str, inner_type: &'a str, decode_method: &'a str);
+
+fn tpl<T: Template>(t: T) -> String {
+    t.render().expect("template render failed").trim_end_matches('\n').to_string()
 }
 
 pub struct PythonRenderer;
@@ -89,20 +131,10 @@ impl LanguageRenderer for PythonRenderer {
 
     fn render_declaration(&self, decl: &Declaration) -> Result<String> {
         match decl {
-            Declaration::Struct {
-                name,
-                fields,
-                doc_comment,
-                annotations,
-            } => {
+            Declaration::Struct { name, fields, doc_comment, annotations } => {
                 self.render_struct(name, fields, annotations, doc_comment.as_deref().unwrap_or(""))
             }
-            Declaration::Enum {
-                name,
-                variants,
-                repr,
-                doc_comment,
-            } => {
+            Declaration::Enum { name, variants, repr, doc_comment } => {
                 let rendered_variants: Vec<_> = variants.iter().map(|v| {
                     VariantContext {
                         name: &v.name,
@@ -122,11 +154,7 @@ impl LanguageRenderer for PythonRenderer {
                 };
                 tmpl.render().map_err(|e| anyhow::anyhow!("Failed to render enum template: {}", e))
             }
-            Declaration::Choice {
-                name,
-                alternatives,
-                doc_comment,
-            } => {
+            Declaration::Choice { name, alternatives, doc_comment } => {
                 self.render_choice(name, alternatives, doc_comment.as_deref().unwrap_or(""))
             }
             Declaration::TypeAlias { name, target } => {
@@ -193,218 +221,90 @@ impl PythonRenderer {
 
     fn render_encode_field(&self, stmt: &EncodeStmt, encoder: &str, tlv_method: &str, indent: &str) -> String {
         match stmt {
-            EncodeStmt::WriteInteger { name, tag: _, value } => {
-                format!(
-                    "{indent}_iv = {encoder}()\n\
-                     {indent}_iv.write_integer({value})\n\
-                     {indent}_ib = _iv.finish()\n\
-                     {indent}_ie = {encoder}()\n\
-                     {indent}_ie.write_tag(TagClass.UNIVERSAL, 2, False)\n\
-                     {indent}_ie.write_length(len(_ib))\n\
-                     {indent}_ie.write_bytes(_ib)\n\
-                     {indent}content.extend(_ie.finish())",
-                    indent = indent, encoder = encoder, value = value
-                )
-            }
-            EncodeStmt::WriteEnumerated { name, tag: _, value } => {
-                format!(
-                    "{indent}_iv = {encoder}()\n\
-                     {indent}_iv.write_integer({value}.value if hasattr({value}, 'value') else {value})\n\
-                     {indent}_ib = _iv.finish()\n\
-                     {indent}_ie = {encoder}()\n\
-                     {indent}_ie.write_tag(TagClass.UNIVERSAL, 10, False)\n\
-                     {indent}_ie.write_length(len(_ib))\n\
-                     {indent}_ie.write_bytes(_ib)\n\
-                     {indent}content.extend(_ie.finish())",
-                    indent = indent, encoder = encoder, value = value
-                )
-            }
-            EncodeStmt::WriteBoolean { name: _, tag: _, value } => {
-                format!(
-                    "{indent}_be = {encoder}()\n\
-                     {indent}_be.write_tag(TagClass.UNIVERSAL, 1, False)\n\
-                     {indent}_be.write_length(1)\n\
-                     {indent}_be.write_bytes(b'\\xff' if {value} else b'\\x00')\n\
-                     {indent}content.extend(_be.finish())",
-                    indent = indent, encoder = encoder, value = value
-                )
-            }
-            EncodeStmt::WriteString { name: _, tag, value, encoding } => {
-                format!(
-                    "{indent}_se = {encoder}()\n\
-                     {indent}_sb = {value}.encode('{encoding}')\n\
-                     {indent}_se.write_tag(TagClass.UNIVERSAL, {tag_num}, False)\n\
-                     {indent}_se.write_length(len(_sb))\n\
-                     {indent}_se.write_bytes(_sb)\n\
-                     {indent}content.extend(_se.finish())",
-                    indent = indent, encoder = encoder, value = value, encoding = encoding, tag_num = tag.number
-                )
-            }
-            EncodeStmt::WriteBytes { name: _, tag, value, tlv_method: _ } => {
-                format!(
-                    "{indent}_be = {encoder}()\n\
-                     {indent}_be.{tlv_method}(TagClass.UNIVERSAL, {tag_num}, {value})\n\
-                     {indent}content.extend(_be.finish())",
-                    indent = indent, encoder = encoder, tlv_method = tlv_method, tag_num = tag.number, value = value
-                )
-            }
-            EncodeStmt::WriteBitString { name: _, tag: _, value } => {
-                format!(
-                    "{indent}_be = {encoder}()\n\
-                     {indent}_be.write_tag(TagClass.UNIVERSAL, 3, False)\n\
-                     {indent}_be.write_length(len({value}.data) + 1)\n\
-                     {indent}_be.write_bytes(bytes([{value}.unused_bits]))\n\
-                     {indent}_be.write_bytes({value}.data)\n\
-                     {indent}content.extend(_be.finish())",
-                    indent = indent, encoder = encoder, value = value
-                )
-            }
-            EncodeStmt::WriteOid { name: _, tag: _, value } => {
-                format!(
-                    "{indent}_oe = {encoder}()\n\
-                     {indent}_ob = {value}.encode()\n\
-                     {indent}_oe.write_tag(TagClass.UNIVERSAL, 6, False)\n\
-                     {indent}_oe.write_length(len(_ob))\n\
-                     {indent}_oe.write_bytes(_ob)\n\
-                     {indent}content.extend(_oe.finish())",
-                    indent = indent, encoder = encoder, value = value
-                )
-            }
-            EncodeStmt::WriteNull { name: _, tag: _ } => {
-                format!(
-                    "{indent}_ne = {encoder}()\n\
-                     {indent}_ne.write_tag(TagClass.UNIVERSAL, 5, False)\n\
-                     {indent}_ne.write_length(0)\n\
-                     {indent}content.extend(_ne.finish())",
-                    indent = indent, encoder = encoder
-                )
-            }
-            EncodeStmt::WriteReal { name: _, tag: _, value } => {
-                format!(
-                    "{indent}import struct\n\
-                     {indent}_re = {encoder}()\n\
-                     {indent}_rb = struct.pack('>d', {value})\n\
-                     {indent}_re.write_tag(TagClass.UNIVERSAL, 9, False)\n\
-                     {indent}_re.write_length(len(_rb))\n\
-                     {indent}_re.write_bytes(_rb)\n\
-                     {indent}content.extend(_re.finish())",
-                    indent = indent, encoder = encoder, value = value
-                )
-            }
-            EncodeStmt::WriteTime { name: _, tag, value } => {
-                format!(
-                    "{indent}_te = {encoder}()\n\
-                     {indent}_tb = {value}.strftime('%Y%m%d%H%M%SZ').encode('ascii')\n\
-                     {indent}_te.write_tag(TagClass.UNIVERSAL, {tag_num}, False)\n\
-                     {indent}_te.write_length(len(_tb))\n\
-                     {indent}_te.write_bytes(_tb)\n\
-                     {indent}content.extend(_te.finish())",
-                    indent = indent, encoder = encoder, value = value, tag_num = tag.number
-                )
-            }
-            EncodeStmt::WriteAny { name: _, value } => {
-                format!("{indent}content.extend({value})", indent = indent, value = value)
-            }
-            EncodeStmt::WriteReferenced { name: _, tag: _, inner_type: _, encode_method, value }
-            | EncodeStmt::WriteChoice { name: _, tag: _, inner_type: _, encode_method, value } => {
-                format!(
-                    "{indent}content.extend({value}.{encode_method}())",
-                    indent = indent, value = value, encode_method = encode_method
-                )
-            }
-            EncodeStmt::WriteList { name: _, tag, value, element_info } => {
+            EncodeStmt::WriteInteger { value, .. } => tpl(EncodeInteger { indent, encoder, value, target: "content" }),
+            EncodeStmt::WriteEnumerated { value, .. } => tpl(EncodeEnumerated { indent, encoder, value, target: "content" }),
+            EncodeStmt::WriteBoolean { value, .. } => tpl(EncodeBoolean { indent, encoder, value, target: "content" }),
+            EncodeStmt::WriteString { tag, value, encoding, .. } => tpl(EncodeString { indent, encoder, value, tag_number: tag.number, string_encoding: encoding, target: "content" }),
+            EncodeStmt::WriteBytes { tag, value, .. } => tpl(EncodeBytes { indent, encoder, value, tag_number: tag.number, tlv_method, target: "content" }),
+            EncodeStmt::WriteBitString { value, .. } => tpl(EncodeBitString { indent, encoder, value, target: "content" }),
+            EncodeStmt::WriteOid { value, .. } => tpl(EncodeOid { indent, encoder, value, target: "content" }),
+            EncodeStmt::WriteNull { .. } => tpl(EncodeNull { indent, encoder, target: "content" }),
+            EncodeStmt::WriteReal { value, .. } => tpl(EncodeReal { indent, encoder, value, target: "content" }),
+            EncodeStmt::WriteTime { tag, value, .. } => tpl(EncodeTime { indent, encoder, value, tag_number: tag.number, target: "content" }),
+            EncodeStmt::WriteAny { value, .. } => tpl(EncodeAny { indent, value, target: "content" }),
+            EncodeStmt::WriteReferenced { encode_method, value, .. }
+            | EncodeStmt::WriteChoice { encode_method, value, .. } => tpl(EncodeReferenced { indent, value, encode_method, target: "content" }),
+            EncodeStmt::WriteList { tag, value, element_info, .. } => {
                 let element_encode = match element_info.encoding.as_str() {
-                    "constructed" | "referenced" => {
-                        format!("{indent}    _lc.extend(_li.encode_der())", indent = indent)
+                    "constructed" | "referenced" | "choice" | "list" => {
+                        format!("{indent}    _lc.extend(_li.encode_der())")
                     }
-                    "choice" => {
-                        format!("{indent}    _lc.extend(_li.encode_der())", indent = indent)
-                    }
-                    "list" => {
-                        format!("{indent}    _lc.extend(_li.encode_der())", indent = indent)
-                    }
-                    "integer" => {
-                        format!(
-                            "{indent}    _lie = {encoder}()\n\
-                             {indent}    _lie.write_integer(_li)\n\
-                             {indent}    _lib = _lie.finish()\n\
-                             {indent}    _lite = {encoder}()\n\
-                             {indent}    _lite.write_tag(TagClass.UNIVERSAL, 2, False)\n\
-                             {indent}    _lite.write_length(len(_lib))\n\
-                             {indent}    _lite.write_bytes(_lib)\n\
-                             {indent}    _lc.extend(_lite.finish())",
-                            indent = indent, encoder = encoder
-                        )
-                    }
-                    "enumerated" => {
-                        format!(
-                            "{indent}    _lie = {encoder}()\n\
-                             {indent}    _lie.write_integer(_li.value if hasattr(_li, 'value') else _li)\n\
-                             {indent}    _lib = _lie.finish()\n\
-                             {indent}    _lite = {encoder}()\n\
-                             {indent}    _lite.write_tag(TagClass.UNIVERSAL, 10, False)\n\
-                             {indent}    _lite.write_length(len(_lib))\n\
-                             {indent}    _lite.write_bytes(_lib)\n\
-                             {indent}    _lc.extend(_lite.finish())",
-                            indent = indent, encoder = encoder
-                        )
-                    }
-                    "boolean" => {
-                        format!(
-                            "{indent}    _be = {encoder}()\n\
-                             {indent}    _be.write_tag(TagClass.UNIVERSAL, 1, False)\n\
-                             {indent}    _be.write_length(1)\n\
-                             {indent}    _be.write_bytes(b'\\xff' if _li else b'\\x00')\n\
-                             {indent}    _lc.extend(_be.finish())",
-                            indent = indent, encoder = encoder
-                        )
-                    }
-                    "string" => {
-                        format!(
-                            "{indent}    _sb = _li.encode('{string_encoding}')\n\
-                             {indent}    _se = {encoder}()\n\
-                             {indent}    _se.write_tag(TagClass.UNIVERSAL, {tag_number}, False)\n\
-                             {indent}    _se.write_length(len(_sb))\n\
-                             {indent}    _se.write_bytes(_sb)\n\
-                             {indent}    _lc.extend(_se.finish())",
-                            indent = indent, encoder = encoder,
-                            string_encoding = element_info.string_encoding,
-                            tag_number = element_info.tag_number
-                        )
-                    }
-                    "bytes" => {
-                        format!(
-                            "{indent}    _be = {encoder}()\n\
-                             {indent}    _be.{tlv_method}(TagClass.UNIVERSAL, 4, _li)\n\
-                             {indent}    _lc.extend(_be.finish())",
-                            indent = indent, encoder = encoder, tlv_method = tlv_method
-                        )
-                    }
-                    "bit_string" => {
-                        format!(
-                            "{indent}    _be = {encoder}()\n\
-                             {indent}    _be.write_tag(TagClass.UNIVERSAL, 3, False)\n\
-                             {indent}    _be.write_length(len(_li.data) + 1)\n\
-                             {indent}    _be.write_bytes(bytes([_li.unused_bits]))\n\
-                             {indent}    _be.write_bytes(_li.data)\n\
-                             {indent}    _lc.extend(_be.finish())",
-                            indent = indent, encoder = encoder
-                        )
-                    }
-                    "oid" => {
-                        format!(
-                            "{indent}    _ob = _li.encode()\n\
-                             {indent}    _oe = {encoder}()\n\
-                             {indent}    _oe.write_tag(TagClass.UNIVERSAL, 6, False)\n\
-                             {indent}    _oe.write_length(len(_ob))\n\
-                             {indent}    _oe.write_bytes(_ob)\n\
-                             {indent}    _lc.extend(_oe.finish())",
-                            indent = indent, encoder = encoder
-                        )
-                    }
-                    _ => {
-                        format!("{indent}    if hasattr(_li, 'encode_der'):\n{indent}        _lc.extend(_li.encode_der())", indent = indent)
-                    }
+                    "integer" => format!(
+                        "{indent}    _lie = {encoder}()\n\
+                         {indent}    _lie.write_integer(_li)\n\
+                         {indent}    _lib = _lie.finish()\n\
+                         {indent}    _lite = {encoder}()\n\
+                         {indent}    _lite.write_tag(TagClass.UNIVERSAL, 2, False)\n\
+                         {indent}    _lite.write_length(len(_lib))\n\
+                         {indent}    _lite.write_bytes(_lib)\n\
+                         {indent}    _lc.extend(_lite.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "enumerated" => format!(
+                        "{indent}    _lie = {encoder}()\n\
+                         {indent}    _lie.write_integer(_li.value if hasattr(_li, 'value') else _li)\n\
+                         {indent}    _lib = _lie.finish()\n\
+                         {indent}    _lite = {encoder}()\n\
+                         {indent}    _lite.write_tag(TagClass.UNIVERSAL, 10, False)\n\
+                         {indent}    _lite.write_length(len(_lib))\n\
+                         {indent}    _lite.write_bytes(_lib)\n\
+                         {indent}    _lc.extend(_lite.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "boolean" => format!(
+                        "{indent}    _be = {encoder}()\n\
+                         {indent}    _be.write_tag(TagClass.UNIVERSAL, 1, False)\n\
+                         {indent}    _be.write_length(1)\n\
+                         {indent}    _be.write_bytes(b'\\xff' if _li else b'\\x00')\n\
+                         {indent}    _lc.extend(_be.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "string" => format!(
+                        "{indent}    _sb = _li.encode('{string_encoding}')\n\
+                         {indent}    _se = {encoder}()\n\
+                         {indent}    _se.write_tag(TagClass.UNIVERSAL, {tag_number}, False)\n\
+                         {indent}    _se.write_length(len(_sb))\n\
+                         {indent}    _se.write_bytes(_sb)\n\
+                         {indent}    _lc.extend(_se.finish())",
+                        indent = indent, encoder = encoder,
+                        string_encoding = element_info.string_encoding,
+                        tag_number = element_info.tag_number
+                    ),
+                    "bytes" => format!(
+                        "{indent}    _be = {encoder}()\n\
+                         {indent}    _be.{tlv_method}(TagClass.UNIVERSAL, 4, _li)\n\
+                         {indent}    _lc.extend(_be.finish())",
+                        indent = indent, encoder = encoder, tlv_method = tlv_method
+                    ),
+                    "bit_string" => format!(
+                        "{indent}    _be = {encoder}()\n\
+                         {indent}    _be.write_tag(TagClass.UNIVERSAL, 3, False)\n\
+                         {indent}    _be.write_length(len(_li.data) + 1)\n\
+                         {indent}    _be.write_bytes(bytes([_li.unused_bits]))\n\
+                         {indent}    _be.write_bytes(_li.data)\n\
+                         {indent}    _lc.extend(_be.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "oid" => format!(
+                        "{indent}    _ob = _li.encode()\n\
+                         {indent}    _oe = {encoder}()\n\
+                         {indent}    _oe.write_tag(TagClass.UNIVERSAL, 6, False)\n\
+                         {indent}    _oe.write_length(len(_ob))\n\
+                         {indent}    _oe.write_bytes(_ob)\n\
+                         {indent}    _lc.extend(_oe.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    _ => format!("{indent}    if hasattr(_li, 'encode_der'):\n{indent}        _lc.extend(_li.encode_der())", indent = indent),
                 };
                 format!(
                     "{indent}_le = {encoder}()\n\
@@ -419,10 +319,7 @@ impl PythonRenderer {
                     element_encode = element_encode
                 )
             }
-            EncodeStmt::WrapExplicit { .. } | EncodeStmt::WrapImplicit { .. } => {
-                // These are for CHOICE alternatives, handled separately
-                String::new()
-            }
+            EncodeStmt::WrapExplicit { .. } | EncodeStmt::WrapImplicit { .. } => String::new(),
         }
     }
 
@@ -444,7 +341,7 @@ impl PythonRenderer {
 
         match tagging_mode.as_str() {
             "explicit" => {
-                let inner_code = match encoding.as_str() {
+                match encoding.as_str() {
                     "integer" => format!(
                         "{indent}if {value} is not None:\n\
                          {inner_indent}_iv = {encoder}()\n\
@@ -624,7 +521,7 @@ impl PythonRenderer {
                                 outer_tag_class = outer_tag_class, outer_tag_number = outer_tag_number
                             )
                         } else {
-                            let encode_method = if encoding.as_str() == "choice" { "encode_der" } else { "encode_der" };
+                            let encode_method = "encode_der";
                             format!(
                                 "{indent}if {value} is not None:\n\
                                  {inner_indent}_inner = {value}.{encode_method}()\n\
@@ -640,11 +537,10 @@ impl PythonRenderer {
                         }
                     }
                     _ => String::new(),
-                };
-                inner_code
+                }
             }
             "implicit" => {
-                let inner_code = match encoding.as_str() {
+                match encoding.as_str() {
                     "integer" => format!(
                         "{indent}if {value} is not None:\n\
                          {inner_indent}_iv = {encoder}()\n\
@@ -796,11 +692,9 @@ impl PythonRenderer {
                         }
                     }
                     _ => String::new(),
-                };
-                inner_code
+                }
             }
             _ => {
-                // inherent tagging
                 match encoding.as_str() {
                     "integer" => format!(
                         "{indent}if {value} is not None:\n\
@@ -921,12 +815,10 @@ impl PythonRenderer {
                                 outer_tag_class = outer_tag_class, outer_tag_number = outer_tag_number
                             )
                         } else {
-                            let encode_method = "encode_der";
                             format!(
                                 "{indent}if {value} is not None:\n\
-                                 {inner_indent}return {value}.{encode_method}()",
-                                indent = indent, inner_indent = inner_indent, value = value,
-                                encode_method = encode_method
+                                 {inner_indent}return {value}.encode_der()",
+                                indent = indent, inner_indent = inner_indent, value = value
                             )
                         }
                     }
@@ -1293,7 +1185,7 @@ impl PythonRenderer {
                 out.push('\n');
             }
         }
-        out.push_str("        raise ValueError(f\"Unknown choice tag: {_tag}\")\n");
+        out.push_str("        raise ValueError(f\"Unknown choice tag: {{_tag}}\")\n");
         out.push_str("\n");
         out.push_str("    @classmethod\n");
         out.push_str(&format!("    def decode_ber_indefinite(cls, data: bytes) -> \"{}\":\n", name));
@@ -1315,7 +1207,7 @@ impl PythonRenderer {
                 out.push('\n');
             }
         }
-        out.push_str("        raise ValueError(f\"Unknown choice tag: {_tag}\")\n");
+        out.push_str("        raise ValueError(f\"Unknown choice tag: {{_tag}}\")\n");
         out.push_str("\n");
         out.push_str("    @classmethod\n");
         out.push_str(&format!("    def decode_der(cls, data: bytes) -> \"{}\":\n", name));
@@ -1334,11 +1226,11 @@ impl PythonRenderer {
                 out.push('\n');
             }
         }
-        out.push_str("        raise ValueError(f\"Unknown choice tag: {_tag}\")\n");
+        out.push_str("        raise ValueError(f\"Unknown choice tag: {{_tag}}\")\n");
         Ok(out)
     }
 
-    fn render_choice_decode_alt(&self, alt: &ChoiceAlternative, decoder_type: &str, decode_method: &str) -> String {
+    fn render_choice_decode_alt(&self, alt: &ChoiceAlternative, decoder_type: &str, _decode_method: &str) -> String {
         let ber = match &alt.ber {
             Some(b) => b,
             None => return String::new(),
@@ -1349,7 +1241,6 @@ impl PythonRenderer {
         let tagging_mode = &ber.tagging_mode;
         let encoding = &ber.encoding;
         let string_encoding = &ber.string_encoding;
-        let inherent_tag_number = ber.inherent_tag_number;
 
         let constructed_check = if !constructed && tagging_mode == "inherent" { " and not _tag[2]" } else { "" };
         let tag_check = format!("_tag[0] == TagClass.{tag_class} and _tag[1] == {tag_number}{constructed_check}");
@@ -1483,7 +1374,7 @@ impl PythonRenderer {
         out
     }
 
-    fn render_choice_decode_referenced(&self, alt: &ChoiceAlternative, decoder_type: &str, decode_method: &str) -> String {
+    fn render_choice_decode_referenced(&self, alt: &ChoiceAlternative, _decoder_type: &str, decode_method: &str) -> String {
         let ber = match &alt.ber {
             Some(b) => b,
             None => return String::new(),
@@ -1727,173 +1618,54 @@ impl PythonRenderer {
 
     fn render_decode_field(&self, stmt: &DecodeStmt, decoder_type: &str, indent: &str) -> String {
         match stmt {
-            DecodeStmt::ReadInteger { name } | DecodeStmt::ReadEnumerated { name } => {
-                format!("{}_{name} = int.from_bytes(_fd, byteorder='big', signed=True)", indent = indent, name = name)
-            }
-            DecodeStmt::ReadBoolean { name } => {
-                format!("{}_{name} = _fd[0] != 0", indent = indent, name = name)
-            }
-            DecodeStmt::ReadString { name, encoding } => {
-                format!("{}_{name} = _fd.decode('{encoding}')", indent = indent, name = name, encoding = encoding)
-            }
-            DecodeStmt::ReadBytes { name } => {
-                format!("{}_{name} = _fd", indent = indent, name = name)
-            }
-            DecodeStmt::ReadBitString { name } => {
-                format!("{}_{name} = BitString(_fd[1:], _fd[0])", indent = indent, name = name)
-            }
-            DecodeStmt::ReadOid { name } => {
-                format!("{}_{name}, _ = ObjectIdentifier.decode(_fd)", indent = indent, name = name)
-            }
-            DecodeStmt::ReadNull { name } => {
-                format!("{}_{name} = None", indent = indent, name = name)
-            }
-            DecodeStmt::ReadReal { name } => {
-                format!("{indent}import struct\n{indent}_{name} = struct.unpack('>d', _fd)[0]", indent = indent, name = name)
-            }
-            DecodeStmt::ReadTime { name } => {
-                format!("{indent}from datetime import datetime\n{indent}_{name} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')", indent = indent, name = name)
-            }
-            DecodeStmt::ReadAny { name, reconstruct_tlv: true } => {
-                format!(
-                    "{indent}_{name}_re = BerEncoder()\n\
-                     {indent}_{name}_re.write_tag(_ft[0], _ft[1], _ft[2])\n\
-                     {indent}_{name}_re.write_length(_fl)\n\
-                     {indent}_{name}_re.write_bytes(_fd)\n\
-                     {indent}_{name} = _{name}_re.finish()",
-                    indent = indent, name = name
-                )
-            }
-            DecodeStmt::ReadAny { name, .. } => {
-                format!("{}_{name} = _fd", indent = indent, name = name)
-            }
-            DecodeStmt::ReadReferenced { name, inner_type, decode_method: _, reconstruct_tlv: true } => {
-                format!(
-                    "{indent}_{name}_re = BerEncoder()\n\
-                     {indent}_{name}_re.write_tag(_ft[0], _ft[1], _ft[2])\n\
-                     {indent}_{name}_re.write_length(_fl)\n\
-                     {indent}_{name}_re.write_bytes(_fd)\n\
-                     {indent}_{name} = {inner_type}.decode_der(_{name}_re.finish())",
-                    indent = indent, name = name, inner_type = inner_type
-                )
-            }
-            DecodeStmt::ReadChoice { name, inner_type, decode_method: _, reconstruct_tlv: true } => {
-                format!(
-                    "{indent}_{name}_re = BerEncoder()\n\
-                     {indent}_{name}_re.write_tag(_ft[0], _ft[1], _ft[2])\n\
-                     {indent}_{name}_re.write_length(_fl)\n\
-                     {indent}_{name}_re.write_bytes(_fd)\n\
-                     {indent}_{name} = {inner_type}.decode_der(_{name}_re.finish())",
-                    indent = indent, name = name, inner_type = inner_type
-                )
-            }
+            DecodeStmt::ReadInteger { name } | DecodeStmt::ReadEnumerated { name } => tpl(DecodeInteger { indent, name }),
+            DecodeStmt::ReadBoolean { name } => tpl(DecodeBoolean { indent, name }),
+            DecodeStmt::ReadString { name, encoding } => tpl(DecodeString { indent, name, encoding }),
+            DecodeStmt::ReadBytes { name } => tpl(DecodeBytes { indent, name }),
+            DecodeStmt::ReadBitString { name } => tpl(DecodeBitString { indent, name }),
+            DecodeStmt::ReadOid { name } => tpl(DecodeOid { indent, name }),
+            DecodeStmt::ReadNull { name } => tpl(DecodeNull { indent, name }),
+            DecodeStmt::ReadReal { name } => tpl(DecodeReal { indent, name }),
+            DecodeStmt::ReadTime { name } => tpl(DecodeTime { indent, name }),
+            DecodeStmt::ReadAny { name, reconstruct_tlv: true } => tpl(DecodeAnyTlv { indent, name }),
+            DecodeStmt::ReadAny { name, .. } => tpl(DecodeAny { indent, name }),
+            DecodeStmt::ReadReferenced { name, inner_type, .. } | DecodeStmt::ReadChoice { name, inner_type, .. } => tpl(DecodeReferencedTlv { indent, name, inner_type, decode_method: "decode_der" }),
             DecodeStmt::ReadList { name, element_info } => {
+                let ii = format!("{indent}    ");
                 let element_decode = match element_info.encoding.as_str() {
                     "constructed" | "referenced" | "choice" | "list" => {
-                        let ref_type = if element_info.referenced_type.is_empty() {
-                            "object"
-                        } else {
-                            &element_info.referenced_type
-                        };
-                        format!(
-                            "{indent}    _{name}_start = _{name}_ld._pos\n\
-                             {indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append({ref_type}.decode_der(_{name}_ld._data[_{name}_start:_{name}_ld._pos]))",
-                            indent = indent, name = name, ref_type = ref_type
-                        )
+                        let ref_type = if element_info.referenced_type.is_empty() { "object" } else { &element_info.referenced_type };
+                        format!("{ii}_{name}_start = _{name}_ld._pos\n{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append({ref_type}.decode_der(_{name}_ld._data[_{name}_start:_{name}_ld._pos]))", name = name, ref_type = ref_type)
                     }
                     "integer" | "enumerated" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(int.from_bytes(_lv, byteorder='big', signed=True))",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(int.from_bytes(_lv, byteorder='big', signed=True))", name = name)
                     }
                     "boolean" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(_lv[0] != 0)",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(_lv[0] != 0)", name = name)
                     }
                     "string" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(_lv.decode('{encoding}'))",
-                            indent = indent, name = name, encoding = element_info.string_encoding
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(_lv.decode('{enc}'))", name = name, enc = element_info.string_encoding)
                     }
                     "bytes" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _{name}.append(_{name}_ld.read_bytes(_ll))",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_{name}.append(_{name}_ld.read_bytes(_ll))", name = name)
                     }
                     "bit_string" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(BitString(_lv[1:], _lv[0]))",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(BitString(_lv[1:], _lv[0]))", name = name)
                     }
                     "oid" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _li_oid, _ = ObjectIdentifier.decode(_lv)\n\
-                             {indent}    _{name}.append(_li_oid)",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_li_oid, _ = ObjectIdentifier.decode(_lv)\n{ii}_{name}.append(_li_oid)", name = name)
                     }
                     "null" => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(None)",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(None)", name = name)
                     }
                     "real" => {
-                        format!(
-                            "{indent}    import struct\n\
-                             {indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(struct.unpack('>d', _lv)[0])",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}import struct\n{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(struct.unpack('>d', _lv)[0])", name = name)
                     }
                     "time" => {
-                        format!(
-                            "{indent}    from datetime import datetime\n\
-                             {indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _lv = _{name}_ld.read_bytes(_ll)\n\
-                             {indent}    _{name}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}from datetime import datetime\n{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_lv = _{name}_ld.read_bytes(_ll)\n{ii}_{name}.append(datetime.strptime(_lv.decode('ascii'), '%Y%m%d%H%M%SZ'))", name = name)
                     }
                     _ => {
-                        format!(
-                            "{indent}    _lt = _{name}_ld.read_tag()\n\
-                             {indent}    _ll = _{name}_ld.read_length()\n\
-                             {indent}    _{name}.append(_{name}_ld.read_bytes(_ll))",
-                            indent = indent, name = name
-                        )
+                        format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_{name}.append(_{name}_ld.read_bytes(_ll))", name = name)
                     }
                 };
                 format!(
@@ -1905,74 +1677,36 @@ impl PythonRenderer {
                     element_decode = element_decode
                 )
             }
-            _ => format!("{indent}pass", indent = indent),
         }
     }
 
     fn render_decode_field_indefinite(&self, stmt: &DecodeStmt, decoder_type: &str, indent: &str) -> String {
         match stmt {
-            DecodeStmt::ReadInteger { name } | DecodeStmt::ReadEnumerated { name } => {
-                format!("{}_{name} = int.from_bytes(_fd, byteorder='big', signed=True)", indent = indent, name = name)
-            }
-            DecodeStmt::ReadBoolean { name } => {
-                format!("{}_{name} = _fd[0] != 0", indent = indent, name = name)
-            }
-            DecodeStmt::ReadString { name, encoding } => {
-                format!("{}_{name} = _fd.decode('{encoding}')", indent = indent, name = name, encoding = encoding)
-            }
-            DecodeStmt::ReadBytes { name } => {
-                format!("{}_{name} = _fd", indent = indent, name = name)
-            }
-            DecodeStmt::ReadBitString { name } => {
-                format!("{}_{name} = BitString(_fd[1:], _fd[0])", indent = indent, name = name)
-            }
-            DecodeStmt::ReadOid { name } => {
-                format!("{}_{name}, _ = ObjectIdentifier.decode(_fd)", indent = indent, name = name)
-            }
-            DecodeStmt::ReadNull { name } => {
-                format!("{}_{name} = None", indent = indent, name = name)
-            }
-            DecodeStmt::ReadReal { name } => {
-                format!("{indent}import struct\n{indent}_{name} = struct.unpack('>d', _fd)[0]", indent = indent, name = name)
-            }
-            DecodeStmt::ReadTime { name } => {
-                format!("{indent}from datetime import datetime\n{indent}_{name} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')", indent = indent, name = name)
-            }
-            DecodeStmt::ReadAny { name, .. } => {
-                format!("{}_{name} = _fd", indent = indent, name = name)
-            }
-            DecodeStmt::ReadReferenced { name, inner_type, decode_method, .. } => {
-                format!(
-                    "{indent}_{name}_re = BerEncoder()\n\
-                     {indent}_{name}_re.write_tag(_ft[0], _ft[1], _ft[2])\n\
-                     {indent}_{name}_re.write_length(_fl)\n\
-                     {indent}_{name}_re.write_bytes(_fd)\n\
-                     {indent}_{name} = {inner_type}.{decode_method}(_{name}_re.finish())",
-                    indent = indent, name = name, inner_type = inner_type, decode_method = decode_method
-                )
-            }
-            DecodeStmt::ReadChoice { name, inner_type, decode_method, .. } => {
-                format!(
-                    "{indent}_{name}_re = BerEncoder()\n\
-                     {indent}_{name}_re.write_tag(_ft[0], _ft[1], _ft[2])\n\
-                     {indent}_{name}_re.write_length(_fl)\n\
-                     {indent}_{name}_re.write_bytes(_fd)\n\
-                     {indent}_{name} = {inner_type}.{decode_method}(_{name}_re.finish())",
-                    indent = indent, name = name, inner_type = inner_type, decode_method = decode_method
-                )
+            DecodeStmt::ReadInteger { name } | DecodeStmt::ReadEnumerated { name } => tpl(DecodeInteger { indent, name }),
+            DecodeStmt::ReadBoolean { name } => tpl(DecodeBoolean { indent, name }),
+            DecodeStmt::ReadString { name, encoding } => tpl(DecodeString { indent, name, encoding }),
+            DecodeStmt::ReadBytes { name } => tpl(DecodeBytes { indent, name }),
+            DecodeStmt::ReadBitString { name } => tpl(DecodeBitString { indent, name }),
+            DecodeStmt::ReadOid { name } => tpl(DecodeOid { indent, name }),
+            DecodeStmt::ReadNull { name } => tpl(DecodeNull { indent, name }),
+            DecodeStmt::ReadReal { name } => tpl(DecodeReal { indent, name }),
+            DecodeStmt::ReadTime { name } => tpl(DecodeTime { indent, name }),
+            DecodeStmt::ReadAny { name, .. } => tpl(DecodeAny { indent, name }),
+            DecodeStmt::ReadReferenced { name, inner_type, decode_method, .. } | DecodeStmt::ReadChoice { name, inner_type, decode_method, .. } => {
+                tpl(DecodeReferencedTlv { indent, name, inner_type, decode_method })
             }
             DecodeStmt::ReadList { name, .. } => {
+                let ii = format!("{indent}    ");
+                let element_decode = format!("{ii}_lt = _{name}_ld.read_tag()\n{ii}_ll = _{name}_ld.read_length()\n{ii}_{name}.append(_{name}_ld.read_bytes(_ll))", name = name);
                 format!(
                     "{indent}_{name}_ld = {decoder_type}(_fd)\n\
                      {indent}_{name} = []\n\
                      {indent}while not _{name}_ld.at_end():\n\
-                     {indent}    _lt = _{name}_ld.read_tag()\n\
-                     {indent}    _ll = _{name}_ld.read_length()\n\
-                     {indent}    _{name}.append(_{name}_ld.read_bytes(_ll))",
-                    indent = indent, name = name, decoder_type = decoder_type
+                     {element_decode}",
+                    indent = indent, name = name, decoder_type = decoder_type,
+                    element_decode = element_decode
                 )
             }
-            _ => format!("{}pass", indent = indent),
         }
     }
 }

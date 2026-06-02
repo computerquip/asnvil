@@ -1,0 +1,6 @@
+{{ indent }}_se = {{ encoder }}()
+{{ indent }}_sb = {{ value }}.encode('{{ string_encoding }}')
+{{ indent }}_se.write_tag(TagClass.UNIVERSAL, {{ tag_number }}, False)
+{{ indent }}_se.write_length(len(_sb))
+{{ indent }}_se.write_bytes(_sb)
+{{ indent }}{{ target }}.extend(_se.finish())

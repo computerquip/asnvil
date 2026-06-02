@@ -1,0 +1,6 @@
+{{ indent }}_be = {{ encoder }}()
+{{ indent }}_be.write_tag(TagClass.UNIVERSAL, 3, False)
+{{ indent }}_be.write_length(len({{ value }}.data) + 1)
+{{ indent }}_be.write_bytes(bytes([{{ value }}.unused_bits]))
+{{ indent }}_be.write_bytes({{ value }}.data)
+{{ indent }}{{ target }}.extend(_be.finish())

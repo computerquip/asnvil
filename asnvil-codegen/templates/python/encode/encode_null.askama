@@ -1,0 +1,4 @@
+{{ indent }}_ne = {{ encoder }}()
+{{ indent }}_ne.write_tag(TagClass.UNIVERSAL, 5, False)
+{{ indent }}_ne.write_length(0)
+{{ indent }}{{ target }}.extend(_ne.finish())

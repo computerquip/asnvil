@@ -1,0 +1,1 @@
+{{ indent }}_{{ name }}, _ = ObjectIdentifier.decode(_fd)

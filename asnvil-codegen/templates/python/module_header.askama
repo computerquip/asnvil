@@ -7,4 +7,4 @@ from enum import Enum, IntEnum
 from datetime import datetime
 
 
-{{ declarations }}
+{{ declarations|safe }}

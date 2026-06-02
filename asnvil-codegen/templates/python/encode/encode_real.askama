@@ -1,0 +1,7 @@
+{{ indent }}import struct
+{{ indent }}_re = {{ encoder }}()
+{{ indent }}_rb = struct.pack('>d', {{ value }})
+{{ indent }}_re.write_tag(TagClass.UNIVERSAL, 9, False)
+{{ indent }}_re.write_length(len(_rb))
+{{ indent }}_re.write_bytes(_rb)
+{{ indent }}{{ target }}.extend(_re.finish())

@@ -1,0 +1,1 @@
+{{ indent }}_{{ name }} = BitString(_fd[1:], _fd[0])

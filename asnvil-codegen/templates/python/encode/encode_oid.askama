@@ -1,0 +1,6 @@
+{{ indent }}_oe = {{ encoder }}()
+{{ indent }}_ob = {{ value }}.encode()
+{{ indent }}_oe.write_tag(TagClass.UNIVERSAL, 6, False)
+{{ indent }}_oe.write_length(len(_ob))
+{{ indent }}_oe.write_bytes(_ob)
+{{ indent }}{{ target }}.extend(_oe.finish())

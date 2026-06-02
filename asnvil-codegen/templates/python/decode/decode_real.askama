@@ -1,0 +1,2 @@
+{{ indent }}import struct
+{{ indent }}_{{ name }} = struct.unpack('>d', _fd)[0]

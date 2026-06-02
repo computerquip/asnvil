@@ -1,0 +1,2 @@
+{{ indent }}from datetime import datetime
+{{ indent }}_{{ name }} = datetime.strptime(_fd.decode('ascii'), '%Y%m%d%H%M%SZ')

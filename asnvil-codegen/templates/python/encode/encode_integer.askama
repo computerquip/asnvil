@@ -1,0 +1,8 @@
+{{ indent }}_iv = {{ encoder }}()
+{{ indent }}_iv.write_integer({{ value }})
+{{ indent }}_ib = _iv.finish()
+{{ indent }}_ie = {{ encoder }}()
+{{ indent }}_ie.write_tag(TagClass.UNIVERSAL, 2, False)
+{{ indent }}_ie.write_length(len(_ib))
+{{ indent }}_ie.write_bytes(_ib)
+{{ indent }}{{ target }}.extend(_ie.finish())

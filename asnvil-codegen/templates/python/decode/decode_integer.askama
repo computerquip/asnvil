@@ -1,0 +1,1 @@
+{{ indent }}_{{ name }} = int.from_bytes(_fd, byteorder='big', signed=True)

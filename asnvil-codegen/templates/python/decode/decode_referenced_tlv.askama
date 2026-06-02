@@ -1,0 +1,5 @@
+{{ indent }}_{{ name }}_re = BerEncoder()
+{{ indent }}_{{ name }}_re.write_tag(_ft[0], _ft[1], _ft[2])
+{{ indent }}_{{ name }}_re.write_length(_fl)
+{{ indent }}_{{ name }}_re.write_bytes(_fd)
+{{ indent }}_{{ name }} = {{ inner_type }}.{{ decode_method }}(_{{ name }}_re.finish())

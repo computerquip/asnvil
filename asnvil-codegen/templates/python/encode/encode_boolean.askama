@@ -1,0 +1,5 @@
+{{ indent }}_be = {{ encoder }}()
+{{ indent }}_be.write_tag(TagClass.UNIVERSAL, 1, False)
+{{ indent }}_be.write_length(1)
+{{ indent }}_be.write_bytes(b'\xff' if {{ value }} else b'\x00')
+{{ indent }}{{ target }}.extend(_be.finish())
