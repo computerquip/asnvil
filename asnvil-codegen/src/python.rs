@@ -4,14 +4,14 @@ use anyhow::{bail, Result};
 use askama::Template;
 
 #[derive(Template)]
-#[template(path = "python/module_header.askama")]
+#[template(path = "python/module_header.txt")]
 struct ModuleTemplate<'a> {
     declarations: &'a str,
     doc_comment: &'a str,
 }
 
 #[derive(Template)]
-#[template(path = "python/enum.askama")]
+#[template(path = "python/enum.txt")]
 struct EnumTemplate<'a> {
     name: &'a str,
     variants: Vec<VariantContext<'a>>,
@@ -20,7 +20,7 @@ struct EnumTemplate<'a> {
 }
 
 #[derive(Template)]
-#[template(path = "python/type_alias.askama")]
+#[template(path = "python/type_alias.txt")]
 struct TypeAliasTemplate<'a> {
     name: &'a str,
     target: String,
@@ -43,32 +43,32 @@ macro_rules! askama_struct {
 }
 
 // ── Encode templates (leaf types only) ────────────────────────────────────────
-askama_struct!(EncodeInteger, "python/encode/encode_integer.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeEnumerated, "python/encode/encode_enumerated.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeBoolean, "python/encode/encode_boolean.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeString, "python/encode/encode_string.askama", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, string_encoding: &'a str, target: &'a str);
-askama_struct!(EncodeBytes, "python/encode/encode_bytes.askama", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, tlv_method: &'a str, target: &'a str);
-askama_struct!(EncodeBitString, "python/encode/encode_bit_string.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeOid, "python/encode/encode_oid.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeNull, "python/encode/encode_null.askama", indent: &'a str, encoder: &'a str, target: &'a str);
-askama_struct!(EncodeReal, "python/encode/encode_real.askama", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeTime, "python/encode/encode_time.askama", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, target: &'a str);
-askama_struct!(EncodeAny, "python/encode/encode_any.askama", indent: &'a str, value: &'a str, target: &'a str);
-askama_struct!(EncodeReferenced, "python/encode/encode_referenced.askama", indent: &'a str, value: &'a str, encode_method: &'a str, target: &'a str);
+askama_struct!(EncodeInteger, "python/encode/encode_integer.txt", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeEnumerated, "python/encode/encode_enumerated.txt", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeBoolean, "python/encode/encode_boolean.txt", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeString, "python/encode/encode_string.txt", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, string_encoding: &'a str, target: &'a str);
+askama_struct!(EncodeBytes, "python/encode/encode_bytes.txt", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, tlv_method: &'a str, target: &'a str);
+askama_struct!(EncodeBitString, "python/encode/encode_bit_string.txt", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeOid, "python/encode/encode_oid.txt", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeNull, "python/encode/encode_null.txt", indent: &'a str, encoder: &'a str, target: &'a str);
+askama_struct!(EncodeReal, "python/encode/encode_real.txt", indent: &'a str, encoder: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeTime, "python/encode/encode_time.txt", indent: &'a str, encoder: &'a str, value: &'a str, tag_number: u32, target: &'a str);
+askama_struct!(EncodeAny, "python/encode/encode_any.txt", indent: &'a str, value: &'a str, target: &'a str);
+askama_struct!(EncodeReferenced, "python/encode/encode_referenced.txt", indent: &'a str, value: &'a str, encode_method: &'a str, target: &'a str);
 
 // ── Decode templates (leaf types only) ────────────────────────────────────────
-askama_struct!(DecodeInteger, "python/decode/decode_integer.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeBoolean, "python/decode/decode_boolean.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeString, "python/decode/decode_string.askama", indent: &'a str, name: &'a str, encoding: &'a str);
-askama_struct!(DecodeBytes, "python/decode/decode_bytes.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeBitString, "python/decode/decode_bit_string.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeOid, "python/decode/decode_oid.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeNull, "python/decode/decode_null.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeReal, "python/decode/decode_real.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeTime, "python/decode/decode_time.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeAny, "python/decode/decode_any.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeAnyTlv, "python/decode/decode_any_tlv.askama", indent: &'a str, name: &'a str);
-askama_struct!(DecodeReferencedTlv, "python/decode/decode_referenced_tlv.askama", indent: &'a str, name: &'a str, inner_type: &'a str, decode_method: &'a str);
+askama_struct!(DecodeInteger, "python/decode/decode_integer.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeBoolean, "python/decode/decode_boolean.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeString, "python/decode/decode_string.txt", indent: &'a str, name: &'a str, encoding: &'a str);
+askama_struct!(DecodeBytes, "python/decode/decode_bytes.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeBitString, "python/decode/decode_bit_string.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeOid, "python/decode/decode_oid.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeNull, "python/decode/decode_null.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeReal, "python/decode/decode_real.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeTime, "python/decode/decode_time.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeAny, "python/decode/decode_any.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeAnyTlv, "python/decode/decode_any_tlv.txt", indent: &'a str, name: &'a str);
+askama_struct!(DecodeReferencedTlv, "python/decode/decode_referenced_tlv.txt", indent: &'a str, name: &'a str, inner_type: &'a str, decode_method: &'a str);
 
 fn tpl<T: Template>(t: T) -> String {
     t.render().expect("template render failed").trim_end_matches('\n').to_string()
