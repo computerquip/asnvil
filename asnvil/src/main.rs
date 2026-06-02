@@ -150,14 +150,37 @@ fn main() -> Result<()> {
 fn copy_dir(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
     for entry in fs::read_dir(src)? {
         let entry = entry?;
+        let file_type = entry.file_type()?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        if src_path.is_dir() {
+
+        if file_type.is_symlink() {
+            let target = fs::read_link(&src_path)?;
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&target, &dst_path)?;
+            #[cfg(windows)]
+            std::os::windows::fs::symlink_file(&target, &dst_path)?;
+        } else if file_type.is_dir() {
             fs::create_dir_all(&dst_path)?;
             copy_dir(&src_path, &dst_path)?;
+            copy_permissions(&src_path, &dst_path)?;
         } else {
             fs::copy(&src_path, &dst_path)?;
+            copy_permissions(&src_path, &dst_path)?;
         }
+    }
+    Ok(())
+}
+
+fn copy_permissions(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let src_meta = fs::metadata(src)?;
+        let dst_meta = fs::metadata(dst)?;
+        let mut perms = dst_meta.permissions();
+        perms.set_mode(src_meta.permissions().mode());
+        fs::set_permissions(dst, perms)?;
     }
     Ok(())
 }
