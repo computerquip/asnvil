@@ -5,8 +5,6 @@ edition.workspace = true
 
 [dependencies]
 asnvil-ir = { path = "../asnvil-ir" }
-thiserror.workspace = true
-miette.workspace = true
 askama = { version = "0.16", features = ["config"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }

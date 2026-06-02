@@ -23,9 +23,6 @@ struct Cli {
     #[arg(long, default_value = "python", help = "Target language: python, rust, ...")]
     lang: String,
 
-    #[arg(long, default_value = "der", help = "Target encoding: ber, der")]
-    encoding: String,
-
     #[arg(long, help = "Also copy runtime library to output directory")]
     emit_runtime: bool,
 

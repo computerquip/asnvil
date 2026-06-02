@@ -54,12 +54,33 @@ impl Resolver {
 
             for symbol in &import.symbols {
                 match &imported_module.exports {
-                    Exports::All => {}
+                    Exports::All => {
+                        // Validate the symbol actually exists in the target module
+                        let exists = imported_module.types.iter().any(|t| &t.name == symbol)
+                            || imported_module.values.iter().any(|v| &v.name == symbol);
+                        if !exists {
+                            return Err(IrError::ImportedSymbolNotFound(
+                                symbol.clone(),
+                                import.module.clone(),
+                                module_name.to_string(),
+                            ));
+                        }
+                    }
                     Exports::Symbols(symbols) => {
                         if !symbols.contains(symbol) {
                             return Err(IrError::UnexportedSymbol(
                                 symbol.clone(),
                                 import.module.clone(),
+                            ));
+                        }
+                        // Also validate the symbol exists in the target module
+                        let exists = imported_module.types.iter().any(|t| &t.name == symbol)
+                            || imported_module.values.iter().any(|v| &v.name == symbol);
+                        if !exists {
+                            return Err(IrError::ImportedSymbolNotFound(
+                                symbol.clone(),
+                                import.module.clone(),
+                                module_name.to_string(),
                             ));
                         }
                     }
@@ -102,6 +123,22 @@ impl Resolver {
         }
     }
 
+    fn resolve_field_list<T, F>(
+        root: &[T],
+        ext: &Option<Vec<T>>,
+        resolve: F,
+        module_name: &str,
+    ) -> Result<(Vec<T>, Option<Vec<T>>), IrError>
+    where
+        F: Fn(&T, &str) -> Result<T, IrError> + Copy,
+    {
+        let resolved_root: Vec<T> = root.iter().map(|f| resolve(f, module_name)).collect::<Result<Vec<_>, _>>()?;
+        let resolved_ext: Option<Vec<T>> = ext.as_ref().map(|fields| {
+            fields.iter().map(|f| resolve(f, module_name)).collect::<Result<Vec<_>, _>>()
+        }).transpose()?;
+        Ok((resolved_root, resolved_ext))
+    }
+
     fn resolve_type(
         &self,
         ty: &AsnType,
@@ -130,95 +167,35 @@ impl Resolver {
                 }
             }
             AsnType::Sequence { fields, ext } => {
-                let resolved_fields: Result<Vec<SequenceField>, IrError> = fields
-                    .iter()
-                    .map(|f| {
-                        Ok(SequenceField {
-                            name: f.name.clone(),
-                            ty: self.resolve_type(&f.ty, module_name)?,
-                            optional: f.optional,
-                            default: f.default.clone(),
-                        })
+                let (root, ext) = Self::resolve_field_list(fields, ext, |f, module_name| {
+                    Ok(SequenceField {
+                        name: f.name.clone(),
+                        ty: self.resolve_type(&f.ty, module_name)?,
+                        optional: f.optional,
+                        default: f.default.clone(),
                     })
-                    .collect();
-
-                let resolved_ext: Option<Result<Vec<SequenceField>, IrError>> = ext.as_ref().map(|fields| {
-                    fields
-                        .iter()
-                        .map(|f| {
-                            Ok(SequenceField {
-                                name: f.name.clone(),
-                                ty: self.resolve_type(&f.ty, module_name)?,
-                                optional: f.optional,
-                                default: f.default.clone(),
-                            })
-                        })
-                        .collect()
-                });
-
-                Ok(AsnType::Sequence {
-                    fields: resolved_fields?,
-                    ext: resolved_ext.transpose()?,
-                })
+                }, module_name)?;
+                Ok(AsnType::Sequence { fields: root, ext })
             }
             AsnType::Set { fields, ext } => {
-                let resolved_fields: Result<Vec<SequenceField>, IrError> = fields
-                    .iter()
-                    .map(|f| {
-                        Ok(SequenceField {
-                            name: f.name.clone(),
-                            ty: self.resolve_type(&f.ty, module_name)?,
-                            optional: f.optional,
-                            default: f.default.clone(),
-                        })
+                let (root, ext) = Self::resolve_field_list(fields, ext, |f, module_name| {
+                    Ok(SequenceField {
+                        name: f.name.clone(),
+                        ty: self.resolve_type(&f.ty, module_name)?,
+                        optional: f.optional,
+                        default: f.default.clone(),
                     })
-                    .collect();
-
-                let resolved_ext: Option<Result<Vec<SequenceField>, IrError>> = ext.as_ref().map(|fields| {
-                    fields
-                        .iter()
-                        .map(|f| {
-                            Ok(SequenceField {
-                                name: f.name.clone(),
-                                ty: self.resolve_type(&f.ty, module_name)?,
-                                optional: f.optional,
-                                default: f.default.clone(),
-                            })
-                        })
-                        .collect()
-                });
-
-                Ok(AsnType::Set {
-                    fields: resolved_fields?,
-                    ext: resolved_ext.transpose()?,
-                })
+                }, module_name)?;
+                Ok(AsnType::Set { fields: root, ext })
             }
             AsnType::Choice { alternatives, ext } => {
-                let resolved_alts: Result<Vec<ChoiceAlternative>, IrError> = alternatives
-                    .iter()
-                    .map(|a| {
-                        Ok(ChoiceAlternative {
-                            name: a.name.clone(),
-                            ty: self.resolve_type(&a.ty, module_name)?,
-                        })
+                let (root, ext) = Self::resolve_field_list(alternatives, ext, |a, module_name| {
+                    Ok(ChoiceAlternative {
+                        name: a.name.clone(),
+                        ty: self.resolve_type(&a.ty, module_name)?,
                     })
-                    .collect();
-
-                let resolved_ext: Option<Result<Vec<ChoiceAlternative>, IrError>> = ext.as_ref().map(|alts| {
-                    alts.iter()
-                        .map(|a| {
-                            Ok(ChoiceAlternative {
-                                name: a.name.clone(),
-                                ty: self.resolve_type(&a.ty, module_name)?,
-                            })
-                        })
-                        .collect()
-                });
-
-                Ok(AsnType::Choice {
-                    alternatives: resolved_alts?,
-                    ext: resolved_ext.transpose()?,
-                })
+                }, module_name)?;
+                Ok(AsnType::Choice { alternatives: root, ext })
             }
             AsnType::SequenceOf { element_type } => {
                 // Don't resolve element type - preserve ReferencedType name

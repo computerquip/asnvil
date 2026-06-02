@@ -1,6 +1,8 @@
 use miette::Diagnostic;
 use thiserror::Error;
 
+use crate::from_ast::ConversionError;
+
 #[derive(Debug, Diagnostic, Error)]
 pub enum IrError {
     #[error("Type '{0}' not found")]
@@ -34,4 +36,18 @@ pub enum IrError {
     #[error("Extension marker error: {0}")]
     #[diagnostic(code(asnvil::ir::extension_error))]
     ExtensionError(String),
+
+    #[error("Imported symbol '{0}' not found in module '{1}' (imported by '{2}')")]
+    #[diagnostic(code(asnvil::ir::imported_symbol_not_found))]
+    ImportedSymbolNotFound(String, String, String),
+
+    #[error("AST to IR conversion failed: {0}")]
+    #[diagnostic(code(asnvil::ir::conversion_error))]
+    ConversionError(String),
+}
+
+impl From<ConversionError> for IrError {
+    fn from(e: ConversionError) -> Self {
+        IrError::ConversionError(e.to_string())
+    }
 }

@@ -1,14 +1,6 @@
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Function {
-    pub name: String,
-    pub params: Vec<Param>,
-    pub return_type: Option<TypeRef>,
-    pub body: TemplateRef,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub enum CodeAstNode {
     Module {
         name: String,
@@ -54,12 +46,6 @@ pub enum Declaration {
         ber: BerFieldInfo,
         doc_comment: Option<String>,
     },
-    Constant {
-        name: String,
-        ty: TypeRef,
-        value: ValueLiteral,
-    },
-    FunctionDecl(Box<Function>),
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -212,18 +198,6 @@ pub enum BuiltinType {
     GeneralizedTime,
     UTCTime,
     Any,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Param {
-    pub name: String,
-    pub ty: TypeRef,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct TemplateRef {
-    pub template_name: String,
-    pub context: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]

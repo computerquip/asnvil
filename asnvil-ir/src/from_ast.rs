@@ -10,31 +10,57 @@ pub enum ConversionError {
     TypeConversion(String),
     #[error("Failed to convert ASN.1 value: {0}")]
     ValueConversion(String),
+    #[error("Duplicate type/value name: {0}")]
+    DuplicateName(String),
+    #[error("Reserved name cannot be used as type/value name: {0}")]
+    ReservedName(String),
+    #[error("Unsupported ASN.1 assignment: {0}")]
+    UnsupportedAssignment(String),
 }
 
 pub fn module_to_ir(ast_mod: &ast::Module) -> Result<ir::AsnModule, ConversionError> {
     let mut types = Vec::new();
     let mut values = Vec::new();
+    let mut seen_names = std::collections::HashSet::new();
 
     for assignment in &ast_mod.body.assignments {
-        match assignment {
+        let name = match assignment {
             ast::Assignment::Type(ta) => {
+                if !seen_names.insert(ta.name.clone()) {
+                    return Err(ConversionError::DuplicateName(ta.name.clone()));
+                }
                 types.push(ir::TypeAssignment {
                     name: ta.name.clone(),
                     ty: asn_type_to_ir(&ta.ty)?,
                     parameters: ta.parameters.as_ref().map(|p| {
-                        p.parameters.iter().map(param_to_ir).collect()
-                    }),
+                        p.parameters.iter().map(param_to_ir).collect::<Result<Vec<_>, _>>()
+                    }).transpose()?,
                 });
+                &ta.name
             }
             ast::Assignment::Value(va) => {
+                if !seen_names.insert(va.name.clone()) {
+                    return Err(ConversionError::DuplicateName(va.name.clone()));
+                }
                 values.push(ir::ValueAssignment {
                     name: va.name.clone(),
                     ty: asn_type_to_ir(&va.ty)?,
                     value: asn_value_to_ir(&va.value)?,
                 });
+                &va.name
             }
-            _ => {}
+            _ => {
+                let name = match assignment {
+                    ast::Assignment::ObjectClass(o) => &o.name,
+                    ast::Assignment::Object(o) => &o.name,
+                    ast::Assignment::ObjectSet(o) => &o.name,
+                    _ => continue,
+                };
+                return Err(ConversionError::UnsupportedAssignment(format!("{} (Object Class support not yet implemented)", name)));
+            }
+        };
+        if name == "ALL" {
+            return Err(ConversionError::ReservedName(name.clone()));
         }
     }
 
@@ -93,20 +119,24 @@ fn oid_component_to_ir(c: &ast::OidComponent) -> ir::OidComponent {
     }
 }
 
-fn param_to_ir(p: &ast::Parameter) -> ir::Parameter {
-    ir::Parameter {
-        name: p.name.clone(),
-        governor: p.governor.as_ref().map(|g| match g {
+fn param_to_ir(p: &ast::Parameter) -> Result<ir::Parameter, ConversionError> {
+    let governor = match p.governor.as_ref() {
+        Some(g) => match g {
             ast::ParameterGovernor::Type(t) => {
-                ir::ParameterGovernor::Type(asn_type_to_ir(t).unwrap_or(ir::AsnType::Any))
+                Some(ir::ParameterGovernor::Type(asn_type_to_ir(t)?))
             }
-            ast::ParameterGovernor::ObjectClass(s) => ir::ParameterGovernor::ObjectClass(s.clone()),
+            ast::ParameterGovernor::ObjectClass(s) => Some(ir::ParameterGovernor::ObjectClass(s.clone())),
             ast::ParameterGovernor::ValueSet(vs) => {
-                let vals: Vec<ir::AsnValue> = vs.iter().filter_map(|v| asn_value_to_ir(v).ok()).collect();
-                ir::ParameterGovernor::ValueSet(vals)
+                let vals: Vec<ir::AsnValue> = vs.iter().map(|v| asn_value_to_ir(v)).collect::<Result<Vec<_>, _>>()?;
+                Some(ir::ParameterGovernor::ValueSet(vals))
             }
-        }),
-    }
+        },
+        None => None,
+    };
+    Ok(ir::Parameter {
+        name: p.name.clone(),
+        governor,
+    })
 }
 
 fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError> {
@@ -120,9 +150,27 @@ fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError>
         }
         ast::AsnType::Real { .. } => ir::AsnType::Real,
         ast::AsnType::Enumerated { items, extensible, ext_items, .. } => {
-            let root = items.iter().map(enum_item_to_ir).collect();
+            let mut next_value = BigInt::from(0);
+            let mut root = Vec::new();
+            for item in items {
+                let value = item.value.clone().unwrap_or_else(|| next_value.clone());
+                next_value = value.clone() + BigInt::from(1);
+                root.push(ir::EnumItem {
+                    name: item.name.clone(),
+                    value,
+                });
+            }
             let ext = if *extensible && !ext_items.is_empty() {
-                Some(ext_items.iter().map(enum_item_to_ir).collect())
+                let mut ext_items_ir = Vec::new();
+                for item in ext_items {
+                    let value = item.value.clone().unwrap_or_else(|| next_value.clone());
+                    next_value = value.clone() + BigInt::from(1);
+                    ext_items_ir.push(ir::EnumItem {
+                        name: item.name.clone(),
+                        value,
+                    });
+                }
+                Some(ext_items_ir)
             } else {
                 None
             };
@@ -171,7 +219,9 @@ fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError>
         }
         ast::AsnType::Tagged { class, number, implicit, inner, .. } => {
             let tc = class.as_ref().map(tag_class_to_ir).unwrap_or(ir::TagClass::ContextSpecific);
-            let num = number.try_into().unwrap_or(0);
+            let num: u32 = number.clone().try_into().map_err(|_| {
+                ConversionError::TypeConversion(format!("Invalid tag number: {}", number))
+            })?;
             let imp = implicit.unwrap_or(false);
             ir::AsnType::Tagged {
                 class: tc,
@@ -204,13 +254,6 @@ fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError>
         }
     };
     Ok(ir_ty)
-}
-
-fn enum_item_to_ir(item: &ast::EnumItem) -> ir::EnumItem {
-    ir::EnumItem {
-        name: item.name.clone(),
-        value: item.value.clone().unwrap_or(BigInt::from(0)),
-    }
 }
 
 fn component_to_ir(comp: &ast::ComponentType) -> Result<ir::SequenceField, ConversionError> {

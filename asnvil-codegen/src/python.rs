@@ -86,7 +86,23 @@ impl PythonRenderer {
             ValueLiteral::Int(n) => n.to_string(),
             ValueLiteral::Bool(true) => "True".to_string(),
             ValueLiteral::Bool(false) => "False".to_string(),
-            ValueLiteral::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
+            ValueLiteral::String(s) => {
+                let mut escaped = String::with_capacity(s.len());
+                for ch in s.chars() {
+                    match ch {
+                        '\\' => escaped.push_str("\\\\"),
+                        '"' => escaped.push_str("\\\""),
+                        '\n' => escaped.push_str("\\n"),
+                        '\t' => escaped.push_str("\\t"),
+                        '\r' => escaped.push_str("\\r"),
+                        c if (c as u32) < 0x20 || c as u32 == 0x7F => {
+                            escaped.push_str(&format!("\\x{:02x}", c as u32));
+                        }
+                        c => escaped.push(c),
+                    }
+                }
+                format!("\"{}\"", escaped)
+            }
             ValueLiteral::Bytes(b) => format!("b'{}'", b.iter().map(|byte| format!("\\x{:02x}", byte)).collect::<String>()),
             ValueLiteral::None => "None".to_string(),
             ValueLiteral::Any => "None".to_string(),
@@ -169,12 +185,6 @@ impl LanguageRenderer for PythonRenderer {
                 let ty_str = self.render_type(element_type)?;
                 self.render_list_type(name, &ty_str, ber, doc_comment.as_deref().unwrap_or(""))
             }
-            Declaration::Constant { .. } => {
-                bail!("Constants not yet supported in Python renderer")
-            }
-            Declaration::FunctionDecl(func) => {
-                self.render_function(func, "function")
-            }
         }
     }
 
@@ -202,10 +212,6 @@ impl LanguageRenderer for PythonRenderer {
                 Ok(format!("list[{}]", inner_type))
             }
         }
-    }
-
-    fn render_function(&self, _func: &Function, _template: &str) -> Result<String> {
-        bail!("Function rendering not yet implemented for Askama")
     }
 
     fn runtime_imports(&self) -> Vec<String> {
@@ -316,6 +322,190 @@ impl PythonRenderer {
                      {indent}_le.write_length(len(_lc))\n\
                      {indent}_le.write_bytes(_lc)\n\
                      {indent}content.extend(_le.finish())",
+                    indent = indent, encoder = encoder, value = value, tag_num = tag.number,
+                    element_encode = element_encode
+                )
+            }
+            EncodeStmt::WrapExplicit { .. } | EncodeStmt::WrapImplicit { .. } => String::new(),
+        }
+    }
+
+    fn render_encode_field_set(&self, stmt: &EncodeStmt, encoder: &str, tlv_method: &str, indent: &str) -> String {
+        match stmt {
+            EncodeStmt::WriteInteger { value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.write_integer({value})\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteEnumerated { value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.write_integer({value})\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteBoolean { value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, 1, False)\n\
+                 {indent}_e.write_length(1)\n\
+                 {indent}_e.write_bytes(b'\\xff' if {value} else b'\\x00')\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteString { tag, value, encoding, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_sb = {value}.encode('{encoding}')\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, {tag_num}, False)\n\
+                 {indent}_e.write_length(len(_sb))\n\
+                 {indent}_e.write_bytes(_sb)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value, encoding = encoding, tag_num = tag.number
+            ),
+            EncodeStmt::WriteBytes { tag, value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.{tlv_method}(TagClass.UNIVERSAL, {tag_num}, {value})\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value, tlv_method = tlv_method, tag_num = tag.number
+            ),
+            EncodeStmt::WriteBitString { value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, 3, False)\n\
+                 {indent}_e.write_length(len({value}.data) + 1)\n\
+                 {indent}_e.write_bytes(bytes([{value}.unused_bits]))\n\
+                 {indent}_e.write_bytes({value}.data)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteOid { value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_ob = {value}.encode()\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, 6, False)\n\
+                 {indent}_e.write_length(len(_ob))\n\
+                 {indent}_e.write_bytes(_ob)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteNull { .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, 5, False)\n\
+                 {indent}_e.write_length(0)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder
+            ),
+            EncodeStmt::WriteReal { value, .. } => format!(
+                "{indent}import struct\n\
+                 {indent}_e = {encoder}()\n\
+                 {indent}_rb = struct.pack('>d', {value})\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, 9, False)\n\
+                 {indent}_e.write_length(len(_rb))\n\
+                 {indent}_e.write_bytes(_rb)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteTime { tag, value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_tb = {value}.strftime('%Y%m%d%H%M%SZ').encode('ascii')\n\
+                 {indent}_e.write_tag(TagClass.UNIVERSAL, {tag_num}, False)\n\
+                 {indent}_e.write_length(len(_tb))\n\
+                 {indent}_e.write_bytes(_tb)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value, tag_num = tag.number
+            ),
+            EncodeStmt::WriteAny { value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_e.write_tlv_der(TagClass.UNIVERSAL, 0, {value})\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value
+            ),
+            EncodeStmt::WriteReferenced { encode_method, value, .. }
+            | EncodeStmt::WriteChoice { encode_method, value, .. } => format!(
+                "{indent}_e = {encoder}()\n\
+                 {indent}_encoded = {value}.{encode_method}()\n\
+                 {indent}_e.write_bytes(_encoded)\n\
+                 {indent}_tlvs.append(_e.finish())",
+                indent = indent, encoder = encoder, value = value, encode_method = encode_method
+            ),
+            EncodeStmt::WriteList { tag, value, element_info, .. } => {
+                let element_encode = match element_info.encoding.as_str() {
+                    "constructed" | "referenced" | "choice" | "list" => {
+                        format!("{indent}    _lc.extend(_li.encode_der())")
+                    }
+                    "integer" => format!(
+                        "{indent}    _lie = {encoder}()\n\
+                         {indent}    _lie.write_integer(_li)\n\
+                         {indent}    _lib = _lie.finish()\n\
+                         {indent}    _lite = {encoder}()\n\
+                         {indent}    _lite.write_tag(TagClass.UNIVERSAL, 2, False)\n\
+                         {indent}    _lite.write_length(len(_lib))\n\
+                         {indent}    _lite.write_bytes(_lib)\n\
+                         {indent}    _lc.extend(_lite.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "enumerated" => format!(
+                        "{indent}    _lie = {encoder}()\n\
+                         {indent}    _lie.write_integer(_li.value if hasattr(_li, 'value') else _li)\n\
+                         {indent}    _lib = _lie.finish()\n\
+                         {indent}    _lite = {encoder}()\n\
+                         {indent}    _lite.write_tag(TagClass.UNIVERSAL, 10, False)\n\
+                         {indent}    _lite.write_length(len(_lib))\n\
+                         {indent}    _lite.write_bytes(_lib)\n\
+                         {indent}    _lc.extend(_lite.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "boolean" => format!(
+                        "{indent}    _be = {encoder}()\n\
+                         {indent}    _be.write_tag(TagClass.UNIVERSAL, 1, False)\n\
+                         {indent}    _be.write_length(1)\n\
+                         {indent}    _be.write_bytes(b'\\xff' if _li else b'\\x00')\n\
+                         {indent}    _lc.extend(_be.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "string" => format!(
+                        "{indent}    _sb = _li.encode('{string_encoding}')\n\
+                         {indent}    _se = {encoder}()\n\
+                         {indent}    _se.write_tag(TagClass.UNIVERSAL, {tag_number}, False)\n\
+                         {indent}    _se.write_length(len(_sb))\n\
+                         {indent}    _se.write_bytes(_sb)\n\
+                         {indent}    _lc.extend(_se.finish())",
+                        indent = indent, encoder = encoder,
+                        string_encoding = element_info.string_encoding,
+                        tag_number = element_info.tag_number
+                    ),
+                    "bytes" => format!(
+                        "{indent}    _be = {encoder}()\n\
+                         {indent}    _be.{tlv_method}(TagClass.UNIVERSAL, 4, _li)\n\
+                         {indent}    _lc.extend(_be.finish())",
+                        indent = indent, encoder = encoder, tlv_method = tlv_method
+                    ),
+                    "bit_string" => format!(
+                        "{indent}    _be = {encoder}()\n\
+                         {indent}    _be.write_tag(TagClass.UNIVERSAL, 3, False)\n\
+                         {indent}    _be.write_length(len(_li.data) + 1)\n\
+                         {indent}    _be.write_bytes(bytes([_li.unused_bits]))\n\
+                         {indent}    _be.write_bytes(_li.data)\n\
+                         {indent}    _lc.extend(_be.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    "oid" => format!(
+                        "{indent}    _ob = _li.encode()\n\
+                         {indent}    _oe = {encoder}()\n\
+                         {indent}    _oe.write_tag(TagClass.UNIVERSAL, 6, False)\n\
+                         {indent}    _oe.write_length(len(_ob))\n\
+                         {indent}    _oe.write_bytes(_ob)\n\
+                         {indent}    _lc.extend(_oe.finish())",
+                        indent = indent, encoder = encoder
+                    ),
+                    _ => format!("{indent}    if hasattr(_li, 'encode_der'):\n{indent}        _lc.extend(_li.encode_der())", indent = indent),
+                };
+                format!(
+                    "{indent}_le = {encoder}()\n\
+                     {indent}_lc = bytearray()\n\
+                     {indent}for _li in {value}:\n\
+                     {element_encode}\n\
+                     {indent}_le.write_tag(TagClass.UNIVERSAL, {tag_num}, True)\n\
+                     {indent}_le.write_length(len(_lc))\n\
+                     {indent}_le.write_bytes(_lc)\n\
+                     {indent}_tlvs.append(_le.finish())",
                     indent = indent, encoder = encoder, value = value, tag_num = tag.number,
                     element_encode = element_encode
                 )
@@ -854,7 +1044,8 @@ impl PythonRenderer {
                 out.push_str(&format!("    {}: {}\n", f.name, ty_str));
             }
         }
-        let outer_tag = if annotations.iter().any(|a| a == "set") { 17 } else { 16 };
+        let is_set = annotations.iter().any(|a| a == "set");
+        let outer_tag = if is_set { 17 } else { 16 };
         out.push_str("\n");
         out.push_str("    def encode_ber(self) -> bytes:\n");
         out.push_str("        content = bytearray()\n");
@@ -912,25 +1103,52 @@ impl PythonRenderer {
         out.push_str("        return _outer.finish()\n");
         out.push_str("\n");
         out.push_str("    def encode_der(self) -> bytes:\n");
-        out.push_str("        content = bytearray()\n");
-        for f in &sorted_fields {
-            if f.ber.is_none() { continue; }
-            let is_optional = f.optional || f.default.is_some();
-            if is_optional {
-                if let Some(ref default) = f.default {
-                    let default_python = Self::value_literal_to_python(default);
-                    out.push_str(&format!("        if self.{} is not None and self.{} != {}:\n", f.name, f.name, default_python));
+        if is_set {
+            out.push_str("        _tlvs = []\n");
+            for f in &sorted_fields {
+                if f.ber.is_none() { continue; }
+                let is_optional = f.optional || f.default.is_some();
+                if is_optional {
+                    if let Some(ref default) = f.default {
+                        let default_python = Self::value_literal_to_python(default);
+                        out.push_str(&format!("        if self.{} is not None and self.{} != {}:\n", f.name, f.name, default_python));
+                    } else {
+                        out.push_str(&format!("        if self.{} is not None:\n", f.name));
+                    }
+                    for stmt in &f.encode_stmts {
+                        out.push_str(&self.render_encode_field_set(stmt, "DerEncoder", "write_tlv_der", "            "));
+                        out.push('\n');
+                    }
                 } else {
-                    out.push_str(&format!("        if self.{} is not None:\n", f.name));
+                    for stmt in &f.encode_stmts {
+                        out.push_str(&self.render_encode_field_set(stmt, "DerEncoder", "write_tlv_der", "        "));
+                        out.push('\n');
+                    }
                 }
-                for stmt in &f.encode_stmts {
-                    out.push_str(&self.render_encode_field(stmt, "DerEncoder", "write_tlv_der", "            "));
-                    out.push('\n');
-                }
-            } else {
-                for stmt in &f.encode_stmts {
-                    out.push_str(&self.render_encode_field(stmt, "DerEncoder", "write_tlv_der", "        "));
-                    out.push('\n');
+            }
+            out.push_str("        _tlvs.sort()\n");
+            out.push_str("        content = b''.join(_tlvs)\n");
+        } else {
+            out.push_str("        content = bytearray()\n");
+            for f in &sorted_fields {
+                if f.ber.is_none() { continue; }
+                let is_optional = f.optional || f.default.is_some();
+                if is_optional {
+                    if let Some(ref default) = f.default {
+                        let default_python = Self::value_literal_to_python(default);
+                        out.push_str(&format!("        if self.{} is not None and self.{} != {}:\n", f.name, f.name, default_python));
+                    } else {
+                        out.push_str(&format!("        if self.{} is not None:\n", f.name));
+                    }
+                    for stmt in &f.encode_stmts {
+                        out.push_str(&self.render_encode_field(stmt, "DerEncoder", "write_tlv_der", "            "));
+                        out.push('\n');
+                    }
+                } else {
+                    for stmt in &f.encode_stmts {
+                        out.push_str(&self.render_encode_field(stmt, "DerEncoder", "write_tlv_der", "        "));
+                        out.push('\n');
+                    }
                 }
             }
         }
@@ -1496,7 +1714,61 @@ impl PythonRenderer {
         out.push_str("        return cls.decode_der(data)\n");
         out.push_str("\n");
         out.push_str("    def encode_der(self) -> bytes:\n");
-        out.push_str("        return self.encode_ber()\n");
+        if ber.tag_number == 17 {
+            // SET OF: elements must be sorted lexicographically by their TLV encoding
+            out.push_str("        _tlvs = []\n");
+            out.push_str("        for _item in self:\n");
+            if let Some(inner) = &ber.list_element_ber {
+                let elem_encode = match inner.encoding.as_str() {
+                    "constructed" | "referenced" => "            _tlvs.append(_item.encode_der())\n",
+                    "choice" => "            _tlvs.append(_item.encode_der())\n",
+                    "list" => "            _tlvs.append(_item.encode_der())\n",
+                    "integer" => "            _ie = DerEncoder()\n            _ie.write_integer(_item)\n            _ib = _ie.finish()\n            _ite = DerEncoder()\n            _ite.write_tag(TagClass.UNIVERSAL, 2, False)\n            _ite.write_length(len(_ib))\n            _ite.write_bytes(_ib)\n            _tlvs.append(_ite.finish())\n",
+                    "enumerated" => "            _ie = DerEncoder()\n            _ie.write_integer(_item.value if hasattr(_item, 'value') else _item)\n            _ib = _ie.finish()\n            _ite = DerEncoder()\n            _ite.write_tag(TagClass.UNIVERSAL, 10, False)\n            _ite.write_length(len(_ib))\n            _ite.write_bytes(_ib)\n            _tlvs.append(_ite.finish())\n",
+                    "boolean" => "            _be = DerEncoder()\n            _be.write_tag(TagClass.UNIVERSAL, 1, False)\n            _be.write_length(1)\n            _be.write_bytes(b'\\xff' if _item else b'\\x00')\n            _tlvs.append(_be.finish())\n",
+                    "string" => &format!("            _sb = _item.encode('{}')\n            _se = DerEncoder()\n            _se.write_tag(TagClass.UNIVERSAL, {}, False)\n            _se.write_length(len(_sb))\n            _se.write_bytes(_sb)\n            _tlvs.append(_se.finish())\n", inner.string_encoding, inner.tag_number),
+                    "bytes" => "            _be = DerEncoder()\n            _be.write_tlv_der(TagClass.UNIVERSAL, 4, _item)\n            _tlvs.append(_be.finish())\n",
+                    "bit_string" => "            _be = DerEncoder()\n            _be.write_tag(TagClass.UNIVERSAL, 3, False)\n            _be.write_length(len(_item.data) + 1)\n            _be.write_bytes(bytes([_item.unused_bits]))\n            _be.write_bytes(_item.data)\n            _tlvs.append(_be.finish())\n",
+                    "oid" => "            _ob = _item.encode()\n            _oe = DerEncoder()\n            _oe.write_tag(TagClass.UNIVERSAL, 6, False)\n            _oe.write_length(len(_ob))\n            _oe.write_bytes(_ob)\n            _tlvs.append(_oe.finish())\n",
+                    _ => "            if hasattr(_item, 'encode_der'):\n                _tlvs.append(_item.encode_der())\n",
+                };
+                out.push_str(elem_encode);
+            } else {
+                out.push_str("            if hasattr(_item, 'encode_der'):\n");
+                out.push_str("                _tlvs.append(_item.encode_der())\n");
+            }
+            out.push_str("        _tlvs.sort()\n");
+            out.push_str("        _content = b''.join(_tlvs)\n");
+        } else {
+            // SEQUENCE OF: no sorting needed
+            out.push_str("        _outer = DerEncoder()\n");
+            out.push_str("        _content = bytearray()\n");
+            out.push_str("        for _item in self:\n");
+            if let Some(inner) = &ber.list_element_ber {
+                let elem_encode = match inner.encoding.as_str() {
+                    "constructed" | "referenced" => "            _content.extend(_item.encode_der())\n",
+                    "choice" => "            _content.extend(_item.encode_der())\n",
+                    "list" => "            _content.extend(_item.encode_der())\n",
+                    "integer" => "            _ie = DerEncoder()\n            _ie.write_integer(_item)\n            _ib = _ie.finish()\n            _ite = DerEncoder()\n            _ite.write_tag(TagClass.UNIVERSAL, 2, False)\n            _ite.write_length(len(_ib))\n            _ite.write_bytes(_ib)\n            _content.extend(_ite.finish())\n",
+                    "enumerated" => "            _ie = DerEncoder()\n            _ie.write_integer(_item.value if hasattr(_item, 'value') else _item)\n            _ib = _ie.finish()\n            _ite = DerEncoder()\n            _ite.write_tag(TagClass.UNIVERSAL, 10, False)\n            _ite.write_length(len(_ib))\n            _ite.write_bytes(_ib)\n            _content.extend(_ite.finish())\n",
+                    "boolean" => "            _be = DerEncoder()\n            _be.write_tag(TagClass.UNIVERSAL, 1, False)\n            _be.write_length(1)\n            _be.write_bytes(b'\\xff' if _item else b'\\x00')\n            _content.extend(_be.finish())\n",
+                    "string" => &format!("            _sb = _item.encode('{}')\n            _se = DerEncoder()\n            _se.write_tag(TagClass.UNIVERSAL, {}, False)\n            _se.write_length(len(_sb))\n            _se.write_bytes(_sb)\n            _content.extend(_se.finish())\n", inner.string_encoding, inner.tag_number),
+                    "bytes" => "            _be = DerEncoder()\n            _be.write_tlv_der(TagClass.UNIVERSAL, 4, _item)\n            _content.extend(_be.finish())\n",
+                    "bit_string" => "            _be = DerEncoder()\n            _be.write_tag(TagClass.UNIVERSAL, 3, False)\n            _be.write_length(len(_item.data) + 1)\n            _be.write_bytes(bytes([_item.unused_bits]))\n            _be.write_bytes(_item.data)\n            _content.extend(_be.finish())\n",
+                    "oid" => "            _ob = _item.encode()\n            _oe = DerEncoder()\n            _oe.write_tag(TagClass.UNIVERSAL, 6, False)\n            _oe.write_length(len(_ob))\n            _oe.write_bytes(_ob)\n            _content.extend(_oe.finish())\n",
+                    _ => "            if hasattr(_item, 'encode_der'):\n                _content.extend(_item.encode_der())\n",
+                };
+                out.push_str(elem_encode);
+            } else {
+                out.push_str("            if hasattr(_item, 'encode_der'):\n");
+                out.push_str("                _content.extend(_item.encode_der())\n");
+            }
+        }
+        out.push_str(&format!("        _outer = DerEncoder()\n"));
+        out.push_str(&format!("        _outer.write_tag(TagClass.UNIVERSAL, {}, True)\n", ber.tag_number));
+        out.push_str("        _outer.write_length(len(_content))\n");
+        out.push_str("        _outer.write_bytes(_content)\n");
+        out.push_str("        return _outer.finish()\n");
         out.push_str("\n");
         out.push_str("    @classmethod\n");
         out.push_str(&format!("    def decode_der(cls, data: bytes) -> \"{name}\":\n"));

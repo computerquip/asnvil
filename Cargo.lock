@@ -145,7 +145,6 @@ dependencies = [
  "asnvil-parser",
  "assert_cmd",
  "clap",
- "miette",
  "num-bigint",
  "predicates",
  "tempfile",
@@ -158,11 +157,9 @@ dependencies = [
  "anyhow",
  "askama",
  "asnvil-ir",
- "miette",
  "num-bigint",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]

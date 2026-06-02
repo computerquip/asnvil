@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn test_enum_sequential_values() {
-        // When enum items have no value, they default to 0 (per R8 - known issue)
+        // When enum items have no value, they should be computed sequentially (R8 fix)
         let items = vec![
             ast_enum_item("first", None),
             ast_enum_item("second", None),
@@ -323,9 +323,9 @@ mod tests {
         let ty = &ir_mod.types[0].ty;
         match ty {
             AsnType::Enumerated { root, .. } => {
-                // Current behavior: missing values default to 0 (R8 bug)
+                // Fixed behavior: missing values computed sequentially
                 assert_eq!(root[0].value, BigInt::from(0));
-                assert_eq!(root[1].value, BigInt::from(0));
+                assert_eq!(root[1].value, BigInt::from(1));
             }
             _ => panic!("expected Enumerated"),
         }
