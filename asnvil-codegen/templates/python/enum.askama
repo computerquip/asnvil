@@ -1,4 +1,4 @@
-class {{ name }}({% if repr == "IntEnum" %}IntEnum{% else %}Enum{% endif %}):
+class {{ name }}({{ repr }}):
 {% if !doc_comment.is_empty() %}
     """{{ doc_comment }}"""
 {% endif %}
