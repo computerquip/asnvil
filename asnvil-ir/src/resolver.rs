@@ -85,10 +85,16 @@ impl Resolver {
                         }
                     }
                     Exports::None => {
-                        return Err(IrError::UnexportedSymbol(
-                            symbol.clone(),
-                            import.module.clone(),
-                        ));
+                        // Per ITU-T X.680 §12.4: absent EXPORTS means all symbols implicitly exported
+                        let exists = imported_module.types.iter().any(|t| &t.name == symbol)
+                            || imported_module.values.iter().any(|v| &v.name == symbol);
+                        if !exists {
+                            return Err(IrError::ImportedSymbolNotFound(
+                                symbol.clone(),
+                                import.module.clone(),
+                                module_name.to_string(),
+                            ));
+                        }
                     }
                 }
             }

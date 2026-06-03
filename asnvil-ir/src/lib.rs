@@ -464,24 +464,18 @@ mod tests {
 
     #[test]
     fn test_resolve_exports_none() {
+        // Per ITU-T X.680 §12.4: absent EXPORTS means all symbols implicitly exported
         let mut resolver = Resolver::new();
         let mod_a = make_ir_module("ModA", vec![
-            TypeAssignment { name: "Secret".into(), ty: AsnType::Integer { named_numbers: vec![] }, parameters: None },
+            TypeAssignment { name: "Public".into(), ty: AsnType::Integer { named_numbers: vec![] }, parameters: None },
         ], vec![], Exports::None);
         let mod_b = make_ir_module("ModB", vec![], vec![
-            Import { symbols: vec!["Secret".into()], module: "ModA".into(), module_oid: None },
+            Import { symbols: vec!["Public".into()], module: "ModA".into(), module_oid: None },
         ], Exports::All);
         resolver.add_module(mod_a).unwrap();
         resolver.add_module(mod_b).unwrap();
         let result = resolver.resolve();
-        assert!(result.is_err(), "importing from non-exporting module should fail");
-        match result.unwrap_err() {
-            IrError::UnexportedSymbol(symbol, module) => {
-                assert_eq!(symbol, "Secret");
-                assert_eq!(module, "ModA");
-            }
-            e => panic!("expected UnexportedSymbol, got {:?}", e),
-        }
+        assert!(result.is_ok(), "Exports::None means all symbols implicitly exported per X.680 §12.4");
     }
 
     // ─── Duplicate detection tests ────────────────────────────────────

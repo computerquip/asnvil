@@ -1057,6 +1057,10 @@ impl CodeAstBuilder {
             AsnType::Tagged { inner, .. } => self.build_type(inner),
             AsnType::OpenType { .. } => TypeRef::Builtin(BuiltinType::Any),
             AsnType::Any => TypeRef::Builtin(BuiltinType::Any),
+            AsnType::Choice { .. } => {
+                // TODO: generate inline CHOICE class name for referenced CHOICE fields
+                TypeRef::Builtin(BuiltinType::Any)
+            }
             _ => TypeRef::Builtin(BuiltinType::Any),
         }
     }

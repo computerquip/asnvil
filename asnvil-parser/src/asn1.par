@@ -110,7 +110,10 @@ UnrestrictedStringType: 'CharacterString';
 TaggedType: [TagClass] '['^ NumberLiteral ']'^ ['IMPLICIT' | 'EXPLICIT'] Type;
 TagClass: 'UNIVERSAL' | 'APPLICATION' | 'PRIVATE';
 
-ReferencedType: Reference;
+ReferencedType: Reference [ActualParameterList];
+
+ActualParameterList: '{' ActualParameter {','^ ActualParameter} '}';
+ActualParameter: Type;
 
 NamedNumberList: '{'^ NamedNumber {','^ NamedNumber} ['...'] '}';
 NamedNumber: Identifier '(' (NumberLiteral | Reference) ')';
