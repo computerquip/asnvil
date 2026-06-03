@@ -34,7 +34,7 @@ ASN.1 source (.asn1)
 [Python Runtime] → BER/DER encode/decode
 ```
 
-**Code AST:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`) and encoding operations (`EncodeStmt`/`DecodeStmt`). Each field knows exactly how to encode and decode itself. `TypeRef`/`BuiltinType` are fully language-agnostic — `PythonRenderer` maps `BuiltinType::Integer` → `"int"`, a future `RustRenderer` would map it → `"i64"`, etc.
+**Code AST:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`) and encoding operations (`EncodeStmt`/`DecodeStmt`). Each field knows exactly how to encode and decode itself. `TypeRef`/`BuiltinType` are fully language-agnostic — `PythonRenderer` maps `BuiltinType::Integer` → `"int"`, a future `RustRenderer` would map it → `"i64"`, etc. `EncodingType` is a proper enum (not strings), so encoding dispatch is compile-time safe.
 
 ### Crates
 
@@ -57,7 +57,6 @@ Arguments:
 Options:
   -o, --out-dir <DIR>        Output directory for generated code
   --lang <LANG>              Target language: python, rust, ... (default: python)
-  --encoding <ENC>           Target encoding: ber, der (default: der)
   --emit-runtime             Also copy runtime library to output directory
   --runtime-dir <DIR>        Custom path to runtime library
   --print-ir                 Print IR instead of generating code
@@ -78,7 +77,7 @@ Options:
 | Python runtime | 55 unit tests | ✅ |
 | Integration | 5 suites, 41 roundtrip tests | ✅ |
 
-**Total: 103 Rust tests + 96 Python tests**
+**Total: 48 Rust tests + 96 Python tests (144 total)**
 
 ### Running Tests
 
@@ -104,6 +103,7 @@ Located at `asnvil-runtime-python/` — ships as a directory alongside generated
 - `AsnError` hierarchy for decode failures
 - Generated per-type encode/decode for SEQUENCE, SET, CHOICE, ENUMERATED, SEQUENCE OF, SET OF
 - DEFAULT value handling
+- Negative integer encoding
 
 ### Runtime API
 
@@ -149,11 +149,11 @@ cargo run -- --help             # CLI help
 | 5: DER Canonicalization | ✅ Done | Sorted SET elements, minimal encoding, strict validation |
 | 6: Integration Tests | ✅ Done | X.509, LDAP roundtrip tests, self-contained runner |
 | 7: CHOICE + Indefinite + ANY DEFINED BY | ✅ Done | Explicit tagging, indefinite BER, raw TLV fields |
-| 8: Test Infrastructure | ✅ Done | 100+ unit tests, integration runner, justfile |
-| R27b: Encoding Logic in Code AST | ✅ Done | EncodeStmt/DecodeStmt in Code AST, TypeRef language-agnostic, ~2000 lines of template encoding dispatch moved to Rust |
-| 9: SNMP Integration | Planned | RFC 3416-based integration test |
-| 10: PER/OER/XER/JER | Future | Additional encoding backends |
-| 11: More Languages | Future | Rust, TypeScript, C, Go backends |
+| R27: Encoding Logic in Code AST | ✅ Done | EncodeStmt/DecodeStmt, EncodingType enum, language-agnostic TypeRef |
+| Review Backlog | ✅ Done | All serious (R6-R14) and design (R24-R34) items completed |
+| 8: SNMP Integration | Planned | RFC 3416-based integration test |
+| 9: PER/OER/XER/JER | Future | Additional encoding backends |
+| 10: More Languages | Future | Rust, TypeScript, C, Go backends |
 
 ## License
 

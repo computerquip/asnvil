@@ -43,11 +43,11 @@ ASN.1 source (.asn1)
 | `asnvil-parser/src/ast.rs` | Hand-written AST types for parse tree |
 | `asnvil-ir/src/ir.rs` | IR data structures (AsnModule, AsnType, etc.) |
 | `asnvil-ir/src/resolver.rs` | Type resolution, import/export, circular ref detection |
-| `asnvil-codegen/src/code_ast.rs` | Code AST types: `Declaration`, `Field`, `ChoiceAlternative`, `TypeRef`, `BerFieldInfo`, `EncodeStmt`, `DecodeStmt` |
+| `asnvil-codegen/src/code_ast.rs` | Code AST types: `Declaration`, `Field`, `ChoiceAlternative`, `TypeRef`, `BerFieldInfo`, `EncodingType`, `EncodeStmt`, `DecodeStmt` |
 | `asnvil-codegen/src/builder.rs` | IR → Code AST transformation (builds `EncodeStmt`/`DecodeStmt` alongside `BerFieldInfo`) |
 | `asnvil-codegen/src/renderer.rs` | `LanguageRenderer` trait for per-language code generation |
 | `asnvil-codegen/src/python.rs` | Python renderer implementing `LanguageRenderer` |
-| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): enum, type_alias, module_header (struct/choice/list templates being replaced by renderer) |
+| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): 3 thin structural wrappers (`enum.txt`, `type_alias.txt`, `module_header.txt`) + leaf encode/decode templates |
 
 ## Critical Parol v4 Integration Notes
 
@@ -216,13 +216,10 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 
 **Key patterns:**
 - Context structs with `has_*` booleans for optional fields (Askama can't `{% if opt %}`)
-- `list_element_ber` uses `Vec<T>` (0 or 1 elements) instead of `Option<Box<T>>`
 - Template syntax: `{% else if %}` or `{% elif %}`, `||`/`&&`/`!` in conditions
 - **Never** replace `or`/`and`/`not` → `||`/`&&`/`!` globally — only inside `{% %}` blocks
 - `{% if !x.is_empty() %}` for strings, `{% if field.has_ber %}` for optional structs
 - Sort in Rust before passing to template (Askama doesn't support `|sort(attribute='x')`)
-
-**Template migration (R27b):** `struct.txt`, `choice.txt`, and `list_type.txt` are being replaced by renderer methods that interpret `EncodeStmt`/`DecodeStmt` from the Code AST. `enum.txt`, `type_alias.txt`, and `module_header.txt` remain as thin structural wrappers.
 
 ### Milestone 7+: Backlog
 
@@ -250,15 +247,17 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Template (`struct.txt`): Added "any" encoding for encode_ber, encode_ber_indefinite, encode_der, decode_der, decode_ber_indefinite with full TLV reconstruction
 - Test: `tests/any_defined_by.asn1` + verified roundtrip (INTEGER 42 as raw TLV in ANY DEFINED BY field)
 
-### R27b: Move Encoding Logic from Templates to Builder ✅ COMPLETE
+### R27: Move Encoding Logic from Templates to Builder ✅ COMPLETE
 
 - **`EncodeStmt`/`DecodeStmt`** enums in `code_ast.rs` — language-agnostic encoding operations alongside `BerFieldInfo` metadata
+- **`EncodingType`** enum replaces stringly-typed encoding dispatch — compile-time safe encoding type matching
 - **`TypeRef`/`BuiltinType`** made language-agnostic: `Integer`, `Boolean`, `String(StringEncoding)`, `OctetString`, `BitString`, `ObjectIdentifier`, `Null`, `Real`, `GeneralizedTime`, `UTCTime`, `Any`
 - **`Field`** has `encode_stmts: Vec<EncodeStmt>` and `decode_stmts: Vec<DecodeStmt>` populated by builder
 - **`ChoiceAlternative`** separated from `Field` struct with own encoding operations and `tagging_mode`
 - **~2000 lines of template encoding dispatch moved to Rust**: deleted `macros.txt`, `struct.txt`, `choice.txt`, `list_type.txt`
 - Only 3 thin structural wrappers remain: `enum.txt`, `type_alias.txt`, `module_header.txt`
-- All 143 tests pass identically
+- Adding a new language requires implementing renderer methods, not duplicating template logic
+- All 144 tests pass identically
 
 **Remaining Backlog:**
 - [ ] SNMP integration test (RFC 3416 based)
@@ -318,17 +317,17 @@ class Person(AsnType):
  - [x] **R41: `IdentifierOrKeyword` doesn't include `Reference`** — `asn1.par:154-170`. Import/export symbols now accept uppercase type names (`Person`, `X509Certificate`). Also fixed R42 `reference()` callback stack pollution: `export_symbol` and `import_symbol` pop the duplicate entry pushed by `reference()` before extracting the name. 2 tests added.
 
 #### asnvil-ir
-- [ ] **R6: Silent error suppression in parameter conversion** — `from_ast.rs:101`. `asn_type_to_ir(t).unwrap_or(ir::AsnType::Any)` silently converts malformed parameter types to `Any`.
-- [ ] **R7: Invalid tag number silently becomes 0** — `from_ast.rs:174`. Negative or out-of-range tag numbers silently coerce to tag `0`.
-- [ ] **R8: Enum value defaults to 0 instead of computing sequentially** — `from_ast.rs:209-214`. Missing enum values should be previous value + 1, not always `0`.
-- [ ] **R9: No duplicate type/name validation** — entire crate. Two types with the same name silently coexist; `resolve_type` finds only the first one via `.find()`.
-- [ ] **R10: Import existence not validated** — `resolver.rs:45-76`. A module can import `"NonExistentType"` and pass validation — the symbol is never checked to actually exist in the target module.
+- [x] **R6: Silent error suppression in parameter conversion** — `from_ast.rs:101`. `asn_type_to_ir(t).unwrap_or(ir::AsnType::Any)` silently converts malformed parameter types to `Any`. **Fixed**: `param_to_ir` now returns `Result`, propagates errors.
+- [x] **R7: Invalid tag number silently becomes 0** — `from_ast.rs:174`. Negative or out-of-range tag numbers silently coerce to tag `0`. **Fixed**: Returns `ConversionError` for out-of-range values.
+- [x] **R8: Enum value defaults to 0 instead of computing sequentially** — `from_ast.rs:209-214`. Missing enum values should be previous value + 1, not always `0`. **Fixed**: Values now computed sequentially.
+- [x] **R9: No duplicate type/name validation** — entire crate. Two types with the same name silently coexist; `resolve_type` finds only the first one via `.find()`. **Fixed**: Added `DuplicateName` and `ReservedName` errors.
+- [x] **R10: Import existence not validated** — `resolver.rs:45-76`. A module can import `"NonExistentType"` and pass validation — the symbol is never checked to actually exist in the target module. **Fixed**: Added `ImportedSymbolNotFound` error variant.
 
 #### asnvil-codegen
-- [ ] **R11: SET elements not sorted during `encode_der`** — `struct.txt`. DER requires SET elements in canonical TLV order. Template encodes fields in declaration order, not by encoded byte order. Re-encoding produces different bytes.
-- [ ] **R12: DER time encoding uses `BerEncoder` instead of `DerEncoder`** — `struct.txt:787`. GeneralizedTime/UTCTime fields in `encode_der` use non-canonical BER encoder.
-- [ ] **R13: `list_type.txt` `encode_der` delegates to `encode_ber`** — `list_type.txt:82-83`. SET OF elements should be sorted for DER; this bypasses canonicalization.
-- [ ] **R14: String escaping incomplete** — `python.rs:135`. `ValueLiteral::String` escaping doesn't handle `\n`, `\t`, `\r`, or control characters. Produces invalid Python output.
+- [x] **R11: SET elements not sorted during `encode_der`** — DER requires SET elements in canonical TLV order. Template encodes fields in declaration order, not by encoded byte order. **Fixed**: Added `render_encode_field_set` that collects TLVs, sorts lexicographically, then concatenates.
+- [x] **R12: DER time encoding uses `BerEncoder` instead of `DerEncoder`** — Already fixed in current code (`DerEncoder` is used for DER).
+- [x] **R13: `list_type.txt` `encode_der` delegates to `encode_ber`** — SET OF elements should be sorted for DER. **Fixed**: SET OF now generates proper sorted DER encoding.
+- [x] **R14: String escaping incomplete** — `python.rs:135`. `ValueLiteral::String` escaping doesn't handle `\n`, `\t`, `\r`, or control characters. **Fixed**: All escape sequences now handled.
 
 #### asnvil-runtime-python
 - [x] **R15: Negative integer encoding broken** — Fixed (see asnvil-parser section above)
@@ -346,32 +345,32 @@ class Person(AsnType):
 - [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
 - [ ] **R22: No constraint parsing** — `asn1.par`. Grammar has no constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` cannot be parsed.
 - [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
- - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. The generic `reference()` callback fires for **every** `Reference` token, pushing raw text. When a more specific callback (e.g., `module_reference`, `open_type`) handles the same non-terminal, two entries end up on the stack. Fixed as part of R41: `export_symbol` and `import_symbol` now pop the duplicate entry pushed by `reference()` before extracting the name.
+ - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. Fixed as part of R41.
 
 #### asnvil-ir
-- [ ] **R24: `ConversionError` and `IrError` disconnected** — two separate error types with no `From` impl. Pipeline error handling is verbose and inconsistent.
-- [ ] **R25: ObjectClass/Object/ObjectSet assignments silently dropped** — `from_ast.rs:37`. Wildcard match with no diagnostic.
-- [ ] **R26: ~60 lines of duplicated field resolution logic** — `resolver.rs:132-194`. Sequence, Set, and Choice resolution arms are nearly identical.
+- [x] **R24: `ConversionError` and `IrError` disconnected** — two separate error types with no `From` impl. **Fixed**: Added `From<ConversionError> for IrError`.
+- [x] **R25: ObjectClass/Object/ObjectSet assignments silently dropped** — `from_ast.rs:37`. Wildcard match with no diagnostic. **Fixed**: Returns `UnsupportedAssignment` error.
+- [x] **R26: ~60 lines of duplicated field resolution logic** — `resolver.rs:132-194`. Sequence, Set, and Choice resolution arms are nearly identical. **Fixed**: Extracted `resolve_field_list` generic helper.
 
 #### asnvil-codegen
-- [ ] **R27: Massive template duplication** — `struct.txt` (2014 lines), `choice.txt` (1576 lines). Four nearly-identical method blocks per template. ~5000+ lines of duplicated logic. Root cause of most consistency bugs. **R27b Phase 1-3 complete**: Code AST enriched with `EncodeStmt`/`DecodeStmt`, `TypeRef` made language-agnostic, `ChoiceAlternative` separated from `Field`. Templates simplified (struct.txt 215 lines, choice.txt 328 lines). Phases 4-7 remaining.
-- [ ] **R28: Stringly-typed encoding enum** — `BerFieldInfo.encoding` uses raw strings. Typos silently fall through to wrong encoding paths.
-- [ ] **R29: `thiserror` dependency declared but never used** — `Cargo.toml:8`.
-- [ ] **R30: Dead code** — `code_ast.rs`: `Function`, `TemplateRef`, `FunctionDecl`, `Constant` variants are never used.
-- [ ] **R31: `render_function()` always bails** — `python.rs:331-333`. Should be removed along with `FunctionDecl` variant.
+- [x] **R27: Massive template duplication** — `struct.txt` (2014 lines), `choice.txt` (1576 lines). **R27b COMPLETE**: Code AST enriched with `EncodeStmt`/`DecodeStmt`, `TypeRef` made language-agnostic, `ChoiceAlternative` separated from `Field`. Templates simplified (struct.txt 215 lines, choice.txt 328 lines). Phases 4-7 complete. **R27c COMPLETE**: Replaced format!() with Askama templates. **R28 COMPLETE**: `EncodingType` enum replaces stringly-typed encoding dispatch.
+- [x] **R28: Stringly-typed encoding enum** — `BerFieldInfo.encoding` uses raw strings. **Fixed**: Replaced with `EncodingType` enum (15 variants, Copy + PartialEq).
+- [x] **R29: `thiserror` dependency declared but never used** — **Removed** from `Cargo.toml`.
+- [x] **R30: Dead code** — `code_ast.rs`: `Function`, `TemplateRef`, `FunctionDecl`, `Constant` variants are never used. **Removed**.
+- [x] **R31: `render_function()` always bails** — `python.rs:331-333`. **Removed** along with `FunctionDecl` variant.
 
 #### CLI
-- [ ] **R32: `--encoding` argument parsed but never used** — `main.rs:27`. Generated code always includes both BER and DER methods regardless.
-- [ ] **R33: `miette` and `num-bigint` dependencies declared but unused** — `asnvil/Cargo.toml`.
-- [ ] **R34: `copy_dir` reimplementation** — `main.rs:153-166`. Doesn't handle symlinks or permissions.
+- [x] **R32: `--encoding` argument parsed but never used** — `main.rs:27`. **Removed** from CLI.
+- [x] **R33: `miette` and `num-bigint` dependencies declared but unused** — `asnvil/Cargo.toml`. **Removed** (kept num-bigint as dev-dep for example).
+- [x] **R34: `copy_dir` reimplementation** — `main.rs:153-166`. Doesn't handle symlinks or permissions. **Fixed**: Now handles symlinks and copies permissions.
 
 ### 🟡 Minor Issues
-- [ ] **R35: Export "ALL" detection by string value** — `grammar.rs:299`. Treats keyword `ALL` and identifier `ALL` identically.
-- [ ] **R36: `extension_default` callback is dead code** — `grammar.rs:127-130`.
-- [ ] **R37: 4/6 `IrError` variants never used** — `error.rs`.
-- [ ] **R38: `AsnAny` has no `__eq__` or `__repr__`** — `types.py:98-102`.
-- [ ] **R39: `capitalize()` doesn't handle Unicode** — `builder.rs:35-41`.
-- [ ] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — `python.rs:81`.
+- [ ] **R35: Export "ALL" detection by string value** — `grammar.rs:299`. Treats keyword `ALL` and identifier `ALL` identically. (Low priority — ALL is reserved keyword)
+- [ ] **R36: `extension_default` callback is dead code** — `grammar.rs:127-130`. (Low priority)
+- [x] **R37: 4/6 `IrError` variants never used** — `error.rs`. **Removed** unused variants (`ConstraintViolation`, `ValueTypeMismatch`, `InvalidTag`, `ExtensionError`).
+- [x] **R38: `AsnAny` has no `__eq__` or `__repr__`** — `types.py:98-102`. **Added** both methods.
+- [ ] **R39: `capitalize()` doesn't handle Unicode** — `builder.rs:35-41`. (Low priority — ASN.1 names are ASCII)
+- [x] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — Already using `Option<Box<BerFieldInfo>>`.
 
 ### Remaining Milestones
 1. SNMP integration test (RFC 3416 based)
@@ -383,4 +382,4 @@ class Person(AsnType):
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
 - Python: 55 runtime unit tests
 - Integration: 5 suites, 41 roundtrip tests
-- **Total: 103 Rust + 96 Python tests**
+- **Total: 144 tests**
