@@ -216,7 +216,7 @@ impl LanguageRenderer for PythonRenderer {
 
     fn runtime_imports(&self) -> Vec<String> {
         vec![
-            "from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, AsnError".to_string(),
+            "from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, AsnError, ConstraintViolationError".to_string(),
             "from dataclasses import dataclass, field".to_string(),
             "from typing import Optional".to_string(),
         ]
@@ -1044,10 +1044,66 @@ impl PythonRenderer {
                 out.push_str(&format!("    {}: {}\n", f.name, ty_str));
             }
         }
+        let has_constraints = sorted_fields.iter().any(|f| f.ber.as_ref().map_or(false, |b| !b.constraints.is_empty()));
+        if has_constraints {
+            out.push_str("\n");
+            out.push_str("    def validate(self) -> None:\n");
+            out.push_str("        \"\"\"Validate ASN.1 constraints.\"\"\"\n");
+            for f in &sorted_fields {
+                let ber = match &f.ber {
+                    Some(b) if !b.constraints.is_empty() => b,
+                    _ => continue,
+                };
+                for cv in &ber.constraints {
+                    match &cv.kind {
+                        crate::code_ast::ConstraintKind::IntegerRange { min, max } => {
+                            let cond = match (min, max) {
+                                (Some(mn), Some(mx)) => format!("self.{} < {} or self.{} > {}", f.name, mn, f.name, mx),
+                                (Some(mn), None) => format!("self.{} < {}", f.name, mn),
+                                (None, Some(mx)) => format!("self.{} > {}", f.name, mx),
+                                (None, None) => continue,
+                            };
+                            let msg = match (min, max) {
+                                (Some(mn), Some(mx)) => format!("\"{} {{}} out of range {}..{}\"", f.name, mn, mx),
+                                (Some(mn), None) => format!("\"{} {{}} below minimum {}\"", f.name, mn),
+                                (None, Some(mx)) => format!("\"{} {{}} exceeds maximum {}\"", f.name, mx),
+                                (None, None) => continue,
+                            };
+                            out.push_str(&format!("        if {}:\n", cond));
+                            out.push_str(&format!("            raise ConstraintViolationError({}.format(self.{}))\n", msg, f.name));
+                        }
+                        crate::code_ast::ConstraintKind::SizeRange { min, max } => {
+                            let cond = match (min, max) {
+                                (Some(mn), Some(mx)) => format!("len(self.{}) < {} or len(self.{}) > {}", f.name, mn, f.name, mx),
+                                (Some(mn), None) => format!("len(self.{}) < {}", f.name, mn),
+                                (None, Some(mx)) => format!("len(self.{}) > {}", f.name, mx),
+                                (None, None) => continue,
+                            };
+                            let msg = match (min, max) {
+                                (Some(mn), Some(mx)) => format!("\"{} length {{}} out of range {}..{}\"", f.name, mn, mx),
+                                (Some(mn), None) => format!("\"{} length {{}} below minimum {}\"", f.name, mn),
+                                (None, Some(mx)) => format!("\"{} length {{}} exceeds maximum {}\"", f.name, mx),
+                                (None, None) => continue,
+                            };
+                            out.push_str(&format!("        if {}:\n", cond));
+                            out.push_str(&format!("            raise ConstraintViolationError({}.format(len(self.{})))\n", msg, f.name));
+                        }
+                        crate::code_ast::ConstraintKind::SingleValue { value } => {
+                            let val = Self::value_literal_to_python(value);
+                            out.push_str(&format!("        if self.{} != {}:\n", f.name, val));
+                            out.push_str(&format!("            raise ConstraintViolationError(\"{} must be {}\")\n", f.name, val));
+                        }
+                    }
+                }
+            }
+        }
         let is_set = annotations.iter().any(|a| a == "set");
         let outer_tag = if is_set { 17 } else { 16 };
         out.push_str("\n");
         out.push_str("    def encode_ber(self) -> bytes:\n");
+        if has_constraints {
+            out.push_str("        self.validate()\n");
+        }
         out.push_str("        content = bytearray()\n");
         for f in &sorted_fields {
             if f.ber.is_none() { continue; }
@@ -1073,6 +1129,9 @@ impl PythonRenderer {
         out.push_str("        return bytes(content)\n");
         out.push_str("\n");
         out.push_str("    def encode_ber_indefinite(self) -> bytes:\n");
+        if has_constraints {
+            out.push_str("        self.validate()\n");
+        }
         out.push_str("        content = bytearray()\n");
         for f in &sorted_fields {
             if f.ber.is_none() { continue; }
@@ -1103,6 +1162,9 @@ impl PythonRenderer {
         out.push_str("        return _outer.finish()\n");
         out.push_str("\n");
         out.push_str("    def encode_der(self) -> bytes:\n");
+        if has_constraints {
+            out.push_str("        self.validate()\n");
+        }
         if is_set {
             out.push_str("        _tlvs = []\n");
             for f in &sorted_fields {
@@ -1216,7 +1278,7 @@ impl PythonRenderer {
                     }
                 }
             }
-            out.push_str("        return cls(\n");
+            out.push_str("        instance = cls(\n");
             for (i, f) in sorted_fields.iter().enumerate() {
                 if f.ber.is_some() {
                     let comma = if i < sorted_fields.len() - 1 { "," } else { "" };
@@ -1224,6 +1286,10 @@ impl PythonRenderer {
                 }
             }
             out.push_str("        )\n");
+            if has_constraints {
+                out.push_str("        instance.validate()\n");
+            }
+            out.push_str("        return instance\n");
         } else {
             out.push_str("        decoder = DerDecoder(data)\n");
             out.push_str("        _tag = decoder.read_tag()\n");
@@ -1275,7 +1341,7 @@ impl PythonRenderer {
                     }
                 }
             }
-            out.push_str("        return cls(\n");
+            out.push_str("        instance = cls(\n");
             for (i, f) in sorted_fields.iter().enumerate() {
                 if f.ber.is_some() {
                     let comma = if i < sorted_fields.len() - 1 { "," } else { "" };
@@ -1283,6 +1349,10 @@ impl PythonRenderer {
                 }
             }
             out.push_str("        )\n");
+            if has_constraints {
+                out.push_str("        instance.validate()\n");
+            }
+            out.push_str("        return instance\n");
         }
         out.push_str("\n");
         out.push_str("    @classmethod\n");

@@ -389,5 +389,20 @@ class Person(AsnType):
 ### Current Test Counts
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
 - Python: 55 runtime unit tests
-- Integration: 5 suites, 41 roundtrip tests
-- **Total: 153 tests**
+- Integration: 6 suites, 59 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 9 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types)
+- **Total: 162 tests**
+
+### Milestone 10: Constraint Parsing ✅ COMPLETE
+
+- **Grammar** (`asn1.par`): Added `Constraint`, `ConstraintSpec`, `SingleElementConstraint`, `ValueRange`, `SizeConstraint`, `PermittedAlphabet` productions. Type productions updated: `IntegerType`, `BitStringType`, `OctetStringType`, `RestrictedStringType`, `UnrestrictedStringType` all accept optional `[Constraint]`.
+- **Parser callbacks** (`grammar.rs`): Added `constraint_stack`, `constraint_spec_stack`. Callbacks for `constraint`, `constraint_spec` build AST nodes with correct min/max value ordering.
+- **AST types** (`ast.rs`): `Integer`, `BitString`, `OctetString`, `RestrictedString`, `UnrestrictedString` variants now have `constraint: Option<Constraint>`.
+- **IR types** (`ir.rs`): Same variants now have `constraints: Constraints`. `Constraints` derives `Default`.
+- **from_ast bridge** (`from_ast.rs`): `constraint_to_ir()` fully implemented with `single_to_ir()`, `range_value_to_ir()`, `element_set_to_ir()` helpers.
+- **Code AST** (`code_ast.rs`): `BerFieldInfo` has `constraints: Vec<ConstraintValidation>`. `ConstraintValidation` and `ConstraintKind` (IntegerRange, SizeRange, SingleValue) added.
+- **Builder** (`builder.rs`): `build_constraints()` extracts IR constraints and converts to code AST validation. Used in `ber_info_for_type()` and `ber_info_for_field()`.
+- **Python renderer** (`python.rs`): `render_struct()` generates `validate()` method with constraint checks. `self.validate()` called in `encode_ber`, `encode_ber_indefinite`, `encode_der`. `instance.validate()` called after construction in `decode_der`.
+- **Template** (`module_header.txt`): Added `ConstraintViolationError` import.
+- **Runtime** (`__init__.py`): Exported `ConstraintViolationError`.
+- **Integration test**: `tests/integration/constrained_types.asn1` + `test_constrained_types.py` — 9 roundtrip + constraint validation tests.
+- **Known limitations**: Constraints on SEQUENCE OF / SET OF types not supported (grammar ambiguity). Contained subtype constraints deferred. Permitted alphabet range handling deferred.

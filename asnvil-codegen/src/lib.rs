@@ -7,7 +7,7 @@ pub mod python;
 mod tests {
     use asnvil_ir::ir::{
         self, AsnModule, AsnType, SequenceField, TypeAssignment, EnumItem,
-        Exports, TagDefault, ChoiceAlternative,
+        Exports, TagDefault, ChoiceAlternative, Constraints,
     };
     use num_bigint::BigInt;
 
@@ -38,7 +38,7 @@ mod tests {
     fn integer_field(name: &str) -> SequenceField {
         SequenceField {
             name: name.to_string(),
-            ty: AsnType::Integer { named_numbers: vec![] },
+            ty: AsnType::Integer { named_numbers: vec![], constraints: ir::Constraints::default() },
             optional: false,
             default: None,
         }
@@ -47,7 +47,7 @@ mod tests {
     fn string_field(name: &str) -> SequenceField {
         SequenceField {
             name: name.to_string(),
-            ty: AsnType::RestrictedString(ir::CharsetType::UTF8),
+            ty: AsnType::RestrictedString(ir::CharsetType::UTF8, ir::Constraints::default()),
             optional: false,
             default: None,
         }
@@ -65,7 +65,7 @@ mod tests {
     fn default_field(name: &str, default: ValueLiteral) -> SequenceField {
         SequenceField {
             name: name.to_string(),
-            ty: AsnType::Integer { named_numbers: vec![] },
+            ty: AsnType::Integer { named_numbers: vec![], constraints: ir::Constraints::default() },
             optional: true,
             default: Some(ir::AsnValue::Integer(BigInt::from(match default {
                 ValueLiteral::Int(n) => n,
@@ -77,7 +77,7 @@ mod tests {
     fn optional_field(name: &str) -> SequenceField {
         SequenceField {
             name: name.to_string(),
-            ty: AsnType::Integer { named_numbers: vec![] },
+            ty: AsnType::Integer { named_numbers: vec![], constraints: ir::Constraints::default() },
             optional: true,
             default: None,
         }
@@ -142,7 +142,7 @@ mod tests {
                 ty: AsnType::Choice {
                     alternatives: vec![
                         ChoiceAlternative { name: "active".into(), ty: AsnType::Boolean },
-                        ChoiceAlternative { name: "pending".into(), ty: AsnType::Integer { named_numbers: vec![] } },
+                        ChoiceAlternative { name: "pending".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() } },
                     ],
                     ext: None,
                 },
@@ -346,7 +346,7 @@ mod tests {
                 ty: AsnType::Choice {
                     alternatives: vec![
                         ChoiceAlternative { name: "active".into(), ty: AsnType::Boolean },
-                        ChoiceAlternative { name: "pending".into(), ty: AsnType::Integer { named_numbers: vec![] } },
+                        ChoiceAlternative { name: "pending".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() } },
                     ],
                     ext: None,
                 },
@@ -403,7 +403,7 @@ mod tests {
                 ty: AsnType::Choice {
                     alternatives: vec![
                         ChoiceAlternative { name: "active".into(), ty: AsnType::Boolean },
-                        ChoiceAlternative { name: "code".into(), ty: AsnType::Integer { named_numbers: vec![] } },
+                        ChoiceAlternative { name: "code".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() } },
                     ],
                     ext: None,
                 },
@@ -460,7 +460,7 @@ mod tests {
         let module = make_ir_module("TestMod", vec![
             TypeAssignment {
                 name: "MyInt".into(),
-                ty: AsnType::Integer { named_numbers: vec![] },
+                ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() },
                 parameters: None,
             },
         ]);

@@ -106,11 +106,11 @@ pub enum ParameterGovernor {
 #[derive(Debug, Clone)]
 pub enum AsnType {
     Boolean,
-    Integer { named_numbers: Vec<(String, BigInt)> },
+    Integer { named_numbers: Vec<(String, BigInt)>, constraints: Constraints },
     Real,
     Enumerated { root: Vec<EnumItem>, ext: Option<Vec<EnumItem>> },
-    BitString { named_bits: Vec<(String, BigInt)> },
-    OctetString,
+    BitString { named_bits: Vec<(String, BigInt)>, constraints: Constraints },
+    OctetString { constraints: Constraints },
     Null,
     ObjectIdentifier,
     RelativeOid,
@@ -120,8 +120,8 @@ pub enum AsnType {
     SetOf { element_type: Box<AsnType> },
     Choice { alternatives: Vec<ChoiceAlternative>, ext: Option<Vec<ChoiceAlternative>> },
     Tagged { class: TagClass, number: u32, implicit: bool, inner: Box<AsnType> },
-    RestrictedString(CharsetType),
-    UnrestrictedString,
+    RestrictedString(CharsetType, Constraints),
+    UnrestrictedString { constraints: Constraints },
     GeneralizedTime,
     UTCTime,
     ReferencedType { module: Option<String>, name: String },
@@ -173,7 +173,7 @@ pub struct EnumItem {
     pub value: BigInt,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Constraints {
     pub subtypes: Vec<SubtypeConstraint>,
 }

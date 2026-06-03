@@ -2,6 +2,7 @@ use crate::code_ast::*;
 use crate::code_ast::ChoiceAlternative as CodeChoiceAlt;
 use asnvil_ir::ir::*;
 use asnvil_ir::ir::ChoiceAlternative as IrChoiceAlt;
+use num_bigint::BigInt;
 use std::collections::HashMap;
 
 fn string_encoding_to_ir(charset: &CharsetType) -> StringEncoding {
@@ -15,6 +16,107 @@ fn string_encoding_to_ir(charset: &CharsetType) -> StringEncoding {
         CharsetType::Universal => StringEncoding::Universal,
         CharsetType::Videotex | CharsetType::Graphic | CharsetType::Visible | CharsetType::General => StringEncoding::UTF8,
     }
+}
+
+fn constraint_value_to_i64(cv: &ConstraintValue) -> Option<i64> {
+    match cv {
+        ConstraintValue::Min => None,
+        ConstraintValue::Max => None,
+        ConstraintValue::Value(AsnValue::Integer(n)) => n.clone().try_into().ok(),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+fn constraint_value_to_usize(cv: &ConstraintValue) -> Option<usize> {
+    match cv {
+        ConstraintValue::Min => None,
+        ConstraintValue::Max => None,
+        ConstraintValue::Value(AsnValue::Integer(n)) => {
+            if *n >= BigInt::from(0) {
+                n.clone().try_into().ok()
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn find_value_range_in_constraints(constraints: &Constraints) -> Option<(Option<i64>, Option<i64>)> {
+    for st in &constraints.subtypes {
+        match st {
+            SubtypeConstraint::ValueRange { min, max } => {
+                return Some((constraint_value_to_i64(min), constraint_value_to_i64(max)));
+            }
+            SubtypeConstraint::Size(inner) => {
+                return find_value_range_in_constraints(inner);
+            }
+            _ => continue,
+        }
+    }
+    None
+}
+
+fn build_constraints(ir_ty: &AsnType, field_name: &str) -> Vec<ConstraintValidation> {
+    let constraints = match ir_ty {
+        AsnType::Integer { constraints, .. } => constraints,
+        AsnType::OctetString { constraints } => constraints,
+        AsnType::BitString { constraints, .. } => constraints,
+        AsnType::RestrictedString(_, constraints) => constraints,
+        AsnType::UnrestrictedString { constraints } => constraints,
+        AsnType::SequenceOf { element_type, .. } => {
+            let inner = build_constraints(element_type, field_name);
+            if !inner.is_empty() {
+                return inner;
+            }
+            return vec![];
+        }
+        AsnType::SetOf { element_type, .. } => {
+            let inner = build_constraints(element_type, field_name);
+            if !inner.is_empty() {
+                return inner;
+            }
+            return vec![];
+        }
+        _ => return vec![],
+    };
+
+    let mut result = Vec::new();
+    for st in &constraints.subtypes {
+        match st {
+            SubtypeConstraint::ValueRange { min, max } => {
+                let mn = constraint_value_to_i64(min);
+                let mx = constraint_value_to_i64(max);
+                result.push(ConstraintValidation {
+                    field: field_name.to_string(),
+                    kind: ConstraintKind::IntegerRange { min: mn, max: mx },
+                });
+            }
+            SubtypeConstraint::Size(inner) => {
+                if let Some((mn, mx)) = find_value_range_in_constraints(inner) {
+                    let size_min = mn.and_then(|v| v.try_into().ok());
+                    let size_max = mx.and_then(|v| v.try_into().ok());
+                    result.push(ConstraintValidation {
+                        field: field_name.to_string(),
+                        kind: ConstraintKind::SizeRange { min: size_min, max: size_max },
+                    });
+                }
+            }
+            SubtypeConstraint::SingleValue(v) => {
+                if let AsnValue::Integer(n) = v {
+                    if let Ok(n64) = n.clone().try_into() {
+                        result.push(ConstraintValidation {
+                            field: field_name.to_string(),
+                            kind: ConstraintKind::SingleValue { value: ValueLiteral::Int(n64) },
+                        });
+                    }
+                }
+            }
+            _ => continue,
+        }
+    }
+    result
 }
 
 pub struct CodeAstBuilder {
@@ -76,14 +178,14 @@ fn extract_alt_tag(ty: &AsnType) -> (String, u32, bool) {
         AsnType::Boolean => ("UNIVERSAL".to_string(), 1, false),
         AsnType::Integer { .. } => ("UNIVERSAL".to_string(), 2, false),
         AsnType::BitString { .. } => ("UNIVERSAL".to_string(), 3, false),
-        AsnType::OctetString => ("UNIVERSAL".to_string(), 4, false),
+        AsnType::OctetString { .. } => ("UNIVERSAL".to_string(), 4, false),
         AsnType::Null => ("UNIVERSAL".to_string(), 5, false),
         AsnType::ObjectIdentifier => ("UNIVERSAL".to_string(), 6, false),
         AsnType::Enumerated { .. } => ("UNIVERSAL".to_string(), 10, false),
         AsnType::Real => ("UNIVERSAL".to_string(), 9, false),
         AsnType::Sequence { .. } => ("UNIVERSAL".to_string(), 16, true),
         AsnType::Set { .. } => ("UNIVERSAL".to_string(), 17, true),
-        AsnType::RestrictedString(charset) => {
+        AsnType::RestrictedString(charset, _constraints) => {
             let tag = match charset {
                 CharsetType::UTF8 => 12,
                 CharsetType::Numeric => 18,
@@ -99,7 +201,7 @@ fn extract_alt_tag(ty: &AsnType) -> (String, u32, bool) {
             };
             ("UNIVERSAL".to_string(), tag, false)
         }
-        AsnType::UnrestrictedString => ("UNIVERSAL".to_string(), 4, false),
+        AsnType::UnrestrictedString { .. } => ("UNIVERSAL".to_string(), 4, false),
         AsnType::GeneralizedTime => ("UNIVERSAL".to_string(), 24, false),
         AsnType::UTCTime => ("UNIVERSAL".to_string(), 23, false),
         AsnType::SequenceOf { .. } => ("UNIVERSAL".to_string(), 16, true),
@@ -336,12 +438,14 @@ impl CodeAstBuilder {
 
     fn ber_info_for_field(&self, ty: &AsnType, parent_name: &str, field_name: &str) -> BerFieldInfo {
         let resolved = self.resolve_type(ty);
-        if is_inline_type(resolved) {
+        let constraints = build_constraints(&resolved, field_name);
+if is_inline_type(resolved) {
             let gen_name = Self::inline_type_name(parent_name, field_name);
             match resolved {
                 AsnType::Choice { .. } => {
                     let alt_tags = make_tags_for_type(resolved);
                     BerFieldInfo {
+                        constraints,
                         encoding: EncodingType::Choice,
                         tag_class: "UNIVERSAL".to_string(),
                         tag_number: 0,
@@ -357,6 +461,7 @@ impl CodeAstBuilder {
                     }
                 }
                 AsnType::Sequence { .. } => BerFieldInfo {
+                    constraints,
                     encoding: EncodingType::Constructed,
                     tag_class: "UNIVERSAL".to_string(),
                     tag_number: 16,
@@ -371,6 +476,7 @@ impl CodeAstBuilder {
                     choice_alternative_tags: Vec::new(),
                 },
                 AsnType::Set { .. } => BerFieldInfo {
+                    constraints,
                     encoding: EncodingType::Constructed,
                     tag_class: "UNIVERSAL".to_string(),
                     tag_number: 17,
@@ -558,7 +664,7 @@ impl CodeAstBuilder {
                     target: TypeRef::Builtin(BuiltinType::BitString),
                 }]
             }
-            AsnType::OctetString => {
+            AsnType::OctetString { .. } => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
                     target: TypeRef::Builtin(BuiltinType::OctetString),
@@ -582,13 +688,13 @@ impl CodeAstBuilder {
                     target: TypeRef::Builtin(BuiltinType::Integer),
                 }]
             }
-            AsnType::RestrictedString(charset) => {
+            AsnType::RestrictedString(charset, _constraints) => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
                     target: TypeRef::Builtin(BuiltinType::String(string_encoding_to_ir(charset))),
                 }]
             }
-            AsnType::UnrestrictedString => {
+            AsnType::UnrestrictedString { .. } => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
                     target: TypeRef::Builtin(BuiltinType::OctetString),
@@ -698,8 +804,11 @@ impl CodeAstBuilder {
         } else {
             None
         };
+        let field_name = original_name.as_deref().unwrap_or("");
+        let constraints = build_constraints(&resolved, field_name);
         match resolved {
             AsnType::Boolean => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Boolean,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 1,
@@ -714,6 +823,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Integer { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Integer,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 2,
@@ -728,6 +838,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Real => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Real,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 9,
@@ -742,6 +853,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Enumerated { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Enumerated,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 10,
@@ -756,6 +868,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::BitString { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::BitString,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 3,
@@ -769,7 +882,8 @@ impl CodeAstBuilder {
                 defined_by: None,
                 choice_alternative_tags: Vec::new(),
             },
-            AsnType::OctetString => BerFieldInfo {
+            AsnType::OctetString { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Bytes,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 4,
@@ -784,6 +898,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Null => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Null,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 5,
@@ -798,6 +913,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::ObjectIdentifier => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Oid,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 6,
@@ -812,6 +928,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Sequence { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Constructed,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 16,
@@ -826,6 +943,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Set { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Constructed,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 17,
@@ -840,6 +958,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::SequenceOf { element_type } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::List,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 16,
@@ -854,6 +973,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::SetOf { element_type } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::List,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 17,
@@ -868,6 +988,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Choice { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Choice,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 0,
@@ -881,7 +1002,7 @@ impl CodeAstBuilder {
                 defined_by: None,
                 choice_alternative_tags: make_alt_tags(resolved),
             },
-            AsnType::RestrictedString(charset) => {
+            AsnType::RestrictedString(charset, _constraints) => {
                 let (tag_number, string_encoding) = match charset {
                     CharsetType::UTF8 => (12, "utf-8".to_string()),
                     CharsetType::Numeric => (18, "utf-8".to_string()),
@@ -896,6 +1017,7 @@ impl CodeAstBuilder {
                     CharsetType::BMP => (30, "ucs-2".to_string()),
                 };
                 BerFieldInfo {
+                    constraints,
                     encoding: EncodingType::String,
                     tag_class: "UNIVERSAL".to_string(),
                     tag_number,
@@ -910,7 +1032,8 @@ impl CodeAstBuilder {
                     choice_alternative_tags: Vec::new(),
                 }
             }
-            AsnType::UnrestrictedString => BerFieldInfo {
+            AsnType::UnrestrictedString { .. } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Bytes,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 4,
@@ -925,6 +1048,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::GeneralizedTime => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Time,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 24,
@@ -939,6 +1063,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::UTCTime => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Time,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 23,
@@ -954,6 +1079,7 @@ impl CodeAstBuilder {
             },
             AsnType::ReferencedType { name, .. } => {
                 BerFieldInfo {
+                    constraints,
                     encoding: EncodingType::Constructed,
                     tag_class: "UNIVERSAL".to_string(),
                     tag_number: 16,
@@ -984,6 +1110,7 @@ impl CodeAstBuilder {
                 }
             }
             AsnType::RelativeOid => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Oid,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 13,
@@ -998,6 +1125,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::OpenType { defined_by } => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Any,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 0,
@@ -1012,6 +1140,7 @@ impl CodeAstBuilder {
                 choice_alternative_tags: Vec::new(),
             },
             AsnType::Any => BerFieldInfo {
+                constraints,
                 encoding: EncodingType::Any,
                 tag_class: "UNIVERSAL".to_string(),
                 tag_number: 0,
@@ -1032,12 +1161,12 @@ impl CodeAstBuilder {
         match ty {
             AsnType::Boolean => TypeRef::Builtin(BuiltinType::Boolean),
             AsnType::Integer { .. } => TypeRef::Builtin(BuiltinType::Integer),
-            AsnType::OctetString => TypeRef::Builtin(BuiltinType::OctetString),
+            AsnType::OctetString { .. } => TypeRef::Builtin(BuiltinType::OctetString),
             AsnType::Null => TypeRef::Builtin(BuiltinType::Null),
-            AsnType::RestrictedString(charset) => {
+            AsnType::RestrictedString(charset, _constraints) => {
                 TypeRef::Builtin(BuiltinType::String(string_encoding_to_ir(charset)))
             }
-            AsnType::UnrestrictedString => {
+            AsnType::UnrestrictedString { .. } => {
                 TypeRef::Builtin(BuiltinType::OctetString)
             }
             AsnType::SequenceOf { element_type } => {

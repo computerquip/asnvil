@@ -5,13 +5,12 @@ pub mod from_ast;
 
 #[cfg(test)]
 mod tests {
-    use miette::SourceSpan;
-    use num_bigint::BigInt;
-
-    use crate::ir::{self, AsnModule, AsnType, SequenceField, TypeAssignment, Exports, Import, TagDefault};
+    use crate::ir::{self, AsnType, Constraints, AsnModule, SequenceField, TypeAssignment, Exports, Import, TagDefault};
     use crate::resolver::Resolver;
     use crate::from_ast::module_to_ir;
     use crate::error::IrError;
+    use miette::SourceSpan;
+    use num_bigint::BigInt;
 
     // ─── Helper: create a span ────────────────────────────────────────
     fn span() -> SourceSpan {
@@ -64,7 +63,7 @@ mod tests {
 
     // ─── Helper: make a primitive AST type ────────────────────────────
     fn ast_integer() -> asnvil_parser::ast::AsnType {
-        asnvil_parser::ast::AsnType::Integer { named_numbers: None, span: span() }
+        asnvil_parser::ast::AsnType::Integer { named_numbers: None, constraint: None, span: span() }
     }
 
     fn ast_boolean() -> asnvil_parser::ast::AsnType {
@@ -74,6 +73,7 @@ mod tests {
     fn ast_string() -> asnvil_parser::ast::AsnType {
         asnvil_parser::ast::AsnType::RestrictedString {
             charset: asnvil_parser::ast::CharsetType::UTF8,
+            constraint: None,
             span: span(),
         }
     }
@@ -180,7 +180,7 @@ mod tests {
                 assert_eq!(fields[0].name, "id");
                 assert!(matches!(fields[0].ty, AsnType::Integer { .. }));
                 assert_eq!(fields[1].name, "name");
-                assert!(matches!(fields[1].ty, AsnType::RestrictedString(_)));
+                assert!(matches!(fields[1].ty, AsnType::RestrictedString(..)));
                 assert_eq!(fields[2].name, "active");
                 assert!(matches!(fields[2].ty, AsnType::Boolean));
                 assert!(ext.is_none());
@@ -336,8 +336,8 @@ mod tests {
     #[test]
     fn test_resolve_simple_sequence() {
         let fields = vec![
-            SequenceField { name: "id".into(), ty: AsnType::Integer { named_numbers: vec![] }, optional: false, default: None },
-            SequenceField { name: "name".into(), ty: AsnType::RestrictedString(ir::CharsetType::UTF8), optional: false, default: None },
+            SequenceField { name: "id".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() }, optional: false, default: None },
+            SequenceField { name: "name".into(), ty: AsnType::RestrictedString(ir::CharsetType::UTF8, Constraints::default()), optional: false, default: None },
         ];
         let mut resolver = Resolver::new();
         let module = make_ir_module("TestMod", vec![
@@ -407,7 +407,7 @@ mod tests {
     fn test_resolve_import_exists() {
         let mut resolver = Resolver::new();
         let mod_a = make_ir_module("ModA", vec![
-            TypeAssignment { name: "Person".into(), ty: AsnType::Integer { named_numbers: vec![] }, parameters: None },
+            TypeAssignment { name: "Person".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() }, parameters: None },
         ], vec![], Exports::All);
         let mod_b = make_ir_module("ModB", vec![
             TypeAssignment { name: "Employee".into(), ty: AsnType::ReferencedType { module: Some("ModA".into()), name: "Person".into() }, parameters: None },
@@ -443,7 +443,7 @@ mod tests {
         let mut resolver = Resolver::new();
         // ModA exports only "Person"
         let mod_a = make_ir_module("ModA", vec![
-            TypeAssignment { name: "Person".into(), ty: AsnType::Integer { named_numbers: vec![] }, parameters: None },
+            TypeAssignment { name: "Person".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() }, parameters: None },
         ], vec![], Exports::Symbols(vec!["Person".into()]));
         // ModB tries to import "Employee" which doesn't exist
         let mod_b = make_ir_module("ModB", vec![], vec![
@@ -467,7 +467,7 @@ mod tests {
         // Per ITU-T X.680 §12.4: absent EXPORTS means all symbols implicitly exported
         let mut resolver = Resolver::new();
         let mod_a = make_ir_module("ModA", vec![
-            TypeAssignment { name: "Public".into(), ty: AsnType::Integer { named_numbers: vec![] }, parameters: None },
+            TypeAssignment { name: "Public".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() }, parameters: None },
         ], vec![], Exports::None);
         let mod_b = make_ir_module("ModB", vec![], vec![
             Import { symbols: vec!["Public".into()], module: "ModA".into(), module_oid: None },
@@ -485,7 +485,7 @@ mod tests {
         // Currently, duplicate types silently coexist (R9 - known issue)
         let mut resolver = Resolver::new();
         let module = make_ir_module("ModA", vec![
-            TypeAssignment { name: "Person".into(), ty: AsnType::Integer { named_numbers: vec![] }, parameters: None },
+            TypeAssignment { name: "Person".into(), ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() }, parameters: None },
             TypeAssignment { name: "Person".into(), ty: AsnType::Boolean, parameters: None },
         ], vec![], Exports::All);
         resolver.add_module(module).unwrap();

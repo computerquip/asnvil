@@ -1,7 +1,7 @@
 """ASN.1 Compiler Python Runtime - Pure stdlib implementation."""
 from __future__ import annotations
 
-from .errors import AsnError, UnexpectedTagError, InvalidLengthError, TruncatedInputError
+from .errors import AsnError, UnexpectedTagError, InvalidLengthError, TruncatedInputError, ConstraintViolationError
 from .ber import BerEncoder, BerDecoder
 from .der import DerEncoder, DerDecoder
 from .types import BitString, ObjectIdentifier
@@ -11,6 +11,7 @@ __all__ = [
     "UnexpectedTagError",
     "InvalidLengthError",
     "TruncatedInputError",
+    "ConstraintViolationError",
     "BerEncoder",
     "BerDecoder",
     "DerEncoder",

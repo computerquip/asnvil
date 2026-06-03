@@ -62,6 +62,20 @@ pub struct BerFieldInfo {
     pub inherent_tag_number: u32,
     pub defined_by: Option<String>,
     pub choice_alternative_tags: Vec<ChoiceAltTag>,
+    pub constraints: Vec<ConstraintValidation>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConstraintValidation {
+    pub field: String,
+    pub kind: ConstraintKind,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum ConstraintKind {
+    IntegerRange { min: Option<i64>, max: Option<i64> },
+    SizeRange { min: Option<usize>, max: Option<usize> },
+    SingleValue { value: ValueLiteral },
 }
 
 #[derive(Debug, Clone, Serialize)]

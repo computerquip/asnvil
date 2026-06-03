@@ -11,10 +11,6 @@
 // Whitespace must be first (skip token)
 Whitespace: /[ \t\r\n]+/ ;
 
-// Non-terminal productions listed BEFORE regex terminals so that keyword
-// literals get higher scanner priority than the Reference/Identifier regexes.
-// Without this ordering, "DEFINITIONS" would match the Reference regex first.
-
 Module: ModuleIdentifier 'DEFINITIONS'^ [TagDefault] [ExtensionDefault] '::='^ 'BEGIN'^ ModuleBody^ 'END'^ ';';
 
 ModuleIdentifier: Reference [DefinitiveIdentifier];
@@ -72,11 +68,11 @@ Type:
     ReferencedType;
 
 BooleanType: 'BOOLEAN';
-IntegerType: 'INTEGER' [NamedNumberList];
+IntegerType: 'INTEGER' [NamedNumberList] [Constraint];
 RealType: 'REAL';
 EnumeratedType: 'ENUMERATED' ['{'^ RootEnumeration ['...'^ ExtAdditions] '}'^];
-BitStringType: 'BIT'^ 'STRING' [NamedBitList];
-OctetStringType: 'OCTET'^ 'STRING';
+BitStringType: 'BIT'^ 'STRING' [NamedBitList] [Constraint];
+OctetStringType: 'OCTET'^ 'STRING' [Constraint];
 NullType: 'NULL';
 SequenceType: 'SEQUENCE' ['{'^ RootSequence ['...'^ ExtAddSequence] '}'^];
 SetType: 'SET' ['{'^ RootSet ['...'^ ExtAddSet] '}'^];
@@ -90,7 +86,11 @@ UTCTimeType: 'UTCTime';
 AnyType: 'ANY';
 OpenType: 'ANY'^ 'DEFINED'^ 'BY'^ Identifier;
 
-RestrictedStringType:
+RestrictedStringType: RestrictedStringBase [Constraint];
+
+UnrestrictedStringType: 'CharacterString' [Constraint];
+
+RestrictedStringBase:
     'UTF8String' |
     'NumericString' |
     'PrintableString' |
@@ -104,8 +104,6 @@ RestrictedStringType:
     'GeneralString' |
     'UniversalString' |
     'BMPString';
-
-UnrestrictedStringType: 'CharacterString';
 
 TaggedType: [TagClass] '['^ NumberLiteral ']'^ ['IMPLICIT' | 'EXPLICIT'] Type;
 TagClass: 'UNIVERSAL' | 'APPLICATION' | 'PRIVATE';
@@ -172,6 +170,21 @@ IdentifierOrKeyword:
     'TeletexString' | 'TRUE' | 'TYPE' | 'UNION' | 'UNIQUE' |
     'UNIVERSAL' | 'UniversalString' | 'UNRESTRICTED' | 'UTCTime' |
     'UTF8String' | 'VideotexString' | 'VisibleString' | 'WITH';
+
+// Constraint syntax (ASN.1 subtype constraints)
+Constraint: '(' ConstraintSpec ')';
+
+ConstraintSpec:
+    '..' Value |
+    Value SingleValueOrRange |
+    SizeConstraint |
+    PermittedAlphabet;
+
+SingleValueOrRange: '..' [Value] | ;
+
+SizeConstraint: 'SIZE'^ '(' ConstraintSpec ')';
+
+PermittedAlphabet: 'FROM'^ '(' ConstraintSpec ')';
 
 // Regex terminal definitions MUST come last so keyword literals above
 // get higher scanner priority.  If these appeared earlier, the Reference

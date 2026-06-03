@@ -142,11 +142,12 @@ fn param_to_ir(p: &ast::Parameter) -> Result<ir::Parameter, ConversionError> {
 fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError> {
     let ir_ty = match ast_ty {
         ast::AsnType::Boolean { .. } => ir::AsnType::Boolean,
-        ast::AsnType::Integer { named_numbers, .. } => {
+        ast::AsnType::Integer { named_numbers, constraint, .. } => {
             let nums = named_numbers.as_ref().map(|nn| {
                 nn.iter().map(|n| (n.name.clone(), n.value.clone())).collect()
             }).unwrap_or_default();
-            ir::AsnType::Integer { named_numbers: nums }
+            let constraints = constraint.as_ref().map(constraint_to_ir).transpose()?.unwrap_or_default();
+            ir::AsnType::Integer { named_numbers: nums, constraints }
         }
         ast::AsnType::Real { .. } => ir::AsnType::Real,
         ast::AsnType::Enumerated { items, extensible, ext_items, .. } => {
@@ -176,13 +177,17 @@ fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError>
             };
             ir::AsnType::Enumerated { root, ext }
         }
-        ast::AsnType::BitString { named_bits, .. } => {
+        ast::AsnType::BitString { named_bits, constraint, .. } => {
             let bits = named_bits.as_ref().map(|nb| {
                 nb.iter().map(|n| (n.name.clone(), n.value.clone())).collect()
             }).unwrap_or_default();
-            ir::AsnType::BitString { named_bits: bits }
+            let constraints = constraint.as_ref().map(constraint_to_ir).transpose()?.unwrap_or_default();
+            ir::AsnType::BitString { named_bits: bits, constraints }
         }
-        ast::AsnType::OctetString { .. } => ir::AsnType::OctetString,
+        ast::AsnType::OctetString { constraint, .. } => {
+            let constraints = constraint.as_ref().map(constraint_to_ir).transpose()?.unwrap_or_default();
+            ir::AsnType::OctetString { constraints }
+        }
         ast::AsnType::Null { .. } => ir::AsnType::Null,
         ast::AsnType::Sequence { fields, extensible, ext_fields, .. } => {
             let root = fields.iter().map(component_to_ir).collect::<Result<Vec<_>, _>>()?;
@@ -212,10 +217,12 @@ fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError>
             ir::AsnType::Choice { alternatives: root, ext }
         }
         ast::AsnType::SequenceOf { element_type, .. } => {
-            ir::AsnType::SequenceOf { element_type: Box::new(asn_type_to_ir(element_type)?) }
+            let et = Box::new(asn_type_to_ir(element_type)?);
+            ir::AsnType::SequenceOf { element_type: et }
         }
         ast::AsnType::SetOf { element_type, .. } => {
-            ir::AsnType::SetOf { element_type: Box::new(asn_type_to_ir(element_type)?) }
+            let et = Box::new(asn_type_to_ir(element_type)?);
+            ir::AsnType::SetOf { element_type: et }
         }
         ast::AsnType::Tagged { class, number, implicit, inner, .. } => {
             let tc = class.as_ref().map(tag_class_to_ir).unwrap_or(ir::TagClass::ContextSpecific);
@@ -232,10 +239,14 @@ fn asn_type_to_ir(ast_ty: &ast::AsnType) -> Result<ir::AsnType, ConversionError>
         }
         ast::AsnType::ObjectIdentifier { .. } => ir::AsnType::ObjectIdentifier,
         ast::AsnType::RelativeOid { .. } => ir::AsnType::RelativeOid,
-        ast::AsnType::RestrictedString { charset, .. } => {
-            ir::AsnType::RestrictedString(charset_to_ir(charset))
+        ast::AsnType::RestrictedString { charset, constraint, .. } => {
+            let constraints = constraint.as_ref().map(constraint_to_ir).transpose()?.unwrap_or_default();
+            ir::AsnType::RestrictedString(charset_to_ir(charset), constraints)
         }
-        ast::AsnType::UnrestrictedString { .. } => ir::AsnType::UnrestrictedString,
+        ast::AsnType::UnrestrictedString { constraint, .. } => {
+            let constraints = constraint.as_ref().map(constraint_to_ir).transpose()?.unwrap_or_default();
+            ir::AsnType::UnrestrictedString { constraints }
+        }
         ast::AsnType::GeneralizedTime { .. } => ir::AsnType::GeneralizedTime,
         ast::AsnType::UTCTime { .. } => ir::AsnType::UTCTime,
         ast::AsnType::Any { .. } => ir::AsnType::Any,
@@ -296,9 +307,57 @@ fn charset_to_ir(cs: &ast::CharsetType) -> ir::CharsetType {
     }
 }
 
-fn constraint_to_ir(_c: &ast::Constraint) -> Result<ir::Constraints, ConversionError> {
-    // Constraints not yet fully parsed from grammar, return empty
-    Ok(ir::Constraints { subtypes: vec![] })
+fn constraint_to_ir(c: &ast::Constraint) -> Result<ir::Constraints, ConversionError> {
+    match &*c.spec {
+        ast::ConstraintSpec::Single(single) => {
+            let subtype = single_to_ir(single)?;
+            Ok(ir::Constraints { subtypes: vec![subtype] })
+        }
+        ast::ConstraintSpec::Union(sets) => {
+            let mut subtypes = Vec::new();
+            for es in sets {
+                element_set_to_ir(es, &mut subtypes)?;
+            }
+            Ok(ir::Constraints { subtypes })
+        }
+    }
+}
+
+fn single_to_ir(s: &ast::SingleElementConstraint) -> Result<ir::SubtypeConstraint, ConversionError> {
+    match s {
+        ast::SingleElementConstraint::Value(v) => {
+            Ok(ir::SubtypeConstraint::SingleValue(asn_value_to_ir(v)?))
+        }
+        ast::SingleElementConstraint::ValueRange(range) => {
+            let min = range_value_to_ir(&range.min)?;
+            let max = range_value_to_ir(&range.max)?;
+            Ok(ir::SubtypeConstraint::ValueRange { min, max })
+        }
+        ast::SingleElementConstraint::Size(inner) => {
+            let inner_constraints = constraint_to_ir(inner)?;
+            Ok(ir::SubtypeConstraint::Size(Box::new(inner_constraints)))
+        }
+        ast::SingleElementConstraint::PermittedAlphabet(inner) => {
+            let inner_constraints = constraint_to_ir(inner)?;
+            Ok(ir::SubtypeConstraint::PermittedAlphabet(Box::new(inner_constraints)))
+        }
+        ast::SingleElementConstraint::ContainedSubtype(_ty) => {
+            Ok(ir::SubtypeConstraint::ContainedSubtype(ir::AsnType::Any))
+        }
+    }
+}
+
+fn range_value_to_ir(rv: &ast::RangeValue) -> Result<ir::ConstraintValue, ConversionError> {
+    match rv {
+        ast::RangeValue::Min => Ok(ir::ConstraintValue::Min),
+        ast::RangeValue::Max => Ok(ir::ConstraintValue::Max),
+        ast::RangeValue::Value(v) => Ok(ir::ConstraintValue::Value(asn_value_to_ir(v)?)),
+    }
+}
+
+fn element_set_to_ir(_es: &ast::ElementSet, _subtypes: &mut Vec<ir::SubtypeConstraint>) -> Result<(), ConversionError> {
+    // Deferred: ALL/EXCEPT prefix handling
+    Ok(())
 }
 
 fn asn_value_to_ir(val: &ast::AsnValue) -> Result<ir::AsnValue, ConversionError> {

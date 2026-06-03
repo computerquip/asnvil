@@ -26,13 +26,13 @@ fn main() -> Result<()> {
                     fields: vec![
                         SequenceField {
                             name: "name".to_string(),
-                            ty: AsnType::RestrictedString(CharsetType::UTF8),
+                            ty: AsnType::RestrictedString(CharsetType::UTF8, Constraints::default()),
                             optional: false,
                             default: None,
                         },
                         SequenceField {
                             name: "age".to_string(),
-                            ty: AsnType::Integer { named_numbers: vec![] },
+                            ty: AsnType::Integer { named_numbers: vec![], constraints: Constraints::default() },
                             optional: false,
                             default: None,
                         },

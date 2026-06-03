@@ -1,6 +1,6 @@
 """{{ doc_comment }}"""
 from __future__ import annotations
-from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, BitString, ObjectIdentifier, AsnError, InvalidLengthError
+from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, BitString, ObjectIdentifier, AsnError, InvalidLengthError, ConstraintViolationError
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum, IntEnum

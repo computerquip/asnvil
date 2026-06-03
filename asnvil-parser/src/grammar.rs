@@ -72,6 +72,8 @@ pub struct Grammar<'t> {
     oid_stack: Stack<ast::OidComponent>,
     module_oid_stack: Stack<ast::ObjectIdentifier>,
     actual_param_stack: Stack<ast::ActualParameter>,
+    constraint_stack: Stack<ast::Constraint>,
+    constraint_spec_stack: Stack<ast::ConstraintSpec>,
 }
 
 impl<'t> Default for Grammar<'t> {
@@ -106,6 +108,8 @@ impl<'t> Grammar<'t> {
             oid_stack: Stack::new(),
             module_oid_stack: Stack::new(),
             actual_param_stack: Stack::new(),
+            constraint_stack: Stack::new(),
+            constraint_spec_stack: Stack::new(),
         }
     }
 }
@@ -514,7 +518,8 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         } else {
             None
         };
-        self.type_stack.push(ast::AsnType::Integer { named_numbers, span: s });
+        let constraint = arg.integer_type_opt0.as_ref().and_then(|_| self.constraint_stack.pop());
+        self.type_stack.push(ast::AsnType::Integer { named_numbers, constraint, span: s });
         Ok(())
     }
 
@@ -576,12 +581,13 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
         } else {
             None
         };
-        self.type_stack.push(ast::AsnType::BitString { named_bits, span: s });
+        self.type_stack.push(ast::AsnType::BitString { named_bits, constraint: arg.bit_string_type_opt0.as_ref().and_then(|_| self.constraint_stack.pop()), span: s });
         Ok(())
     }
 
     fn octet_string_type(&mut self, arg: &OctetStringType<'t>) -> Result<()> {
-        self.type_stack.push(ast::AsnType::OctetString { span: span(&arg.s_t_r_i_n_g) });
+        let constraint = arg.octet_string_type_opt.as_ref().and_then(|_| self.constraint_stack.pop());
+        self.type_stack.push(ast::AsnType::OctetString { constraint, span: span(&arg.s_t_r_i_n_g) });
         Ok(())
     }
 
@@ -742,27 +748,30 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn restricted_string_type(&mut self, arg: &RestrictedStringType<'t>) -> Result<()> {
-        let (charset, s) = match arg {
-            RestrictedStringType::UTF8String(inner) => (ast::CharsetType::UTF8, span(&inner.u_t_f8_string)),
-            RestrictedStringType::NumericString(inner) => (ast::CharsetType::Numeric, span(&inner.numeric_string)),
-            RestrictedStringType::PrintableString(inner) => (ast::CharsetType::Printable, span(&inner.printable_string)),
-            RestrictedStringType::TeletexString(inner) => (ast::CharsetType::Teletex, span(&inner.teletex_string)),
-            RestrictedStringType::T61String(inner) => (ast::CharsetType::Teletex, span(&inner.t61_string)),
-            RestrictedStringType::VideotexString(inner) => (ast::CharsetType::Videotex, span(&inner.videotex_string)),
-            RestrictedStringType::IA5String(inner) => (ast::CharsetType::IA5, span(&inner.i_a5_string)),
-            RestrictedStringType::GraphicString(inner) => (ast::CharsetType::Graphic, span(&inner.graphic_string)),
-            RestrictedStringType::VisibleString(inner) => (ast::CharsetType::Visible, span(&inner.visible_string)),
-            RestrictedStringType::ISO646String(inner) => (ast::CharsetType::General, span(&inner.i_s_o646_string)),
-            RestrictedStringType::GeneralString(inner) => (ast::CharsetType::General, span(&inner.general_string)),
-            RestrictedStringType::UniversalString(inner) => (ast::CharsetType::Universal, span(&inner.universal_string)),
-            RestrictedStringType::BMPString(inner) => (ast::CharsetType::BMP, span(&inner.b_m_p_string)),
+        let base = &*arg.restricted_string_base;
+        let (charset, s) = match base {
+            RestrictedStringBase::UTF8String(inner) => (ast::CharsetType::UTF8, span(&inner.u_t_f8_string)),
+            RestrictedStringBase::NumericString(inner) => (ast::CharsetType::Numeric, span(&inner.numeric_string)),
+            RestrictedStringBase::PrintableString(inner) => (ast::CharsetType::Printable, span(&inner.printable_string)),
+            RestrictedStringBase::TeletexString(inner) => (ast::CharsetType::Teletex, span(&inner.teletex_string)),
+            RestrictedStringBase::T61String(inner) => (ast::CharsetType::Teletex, span(&inner.t61_string)),
+            RestrictedStringBase::VideotexString(inner) => (ast::CharsetType::Videotex, span(&inner.videotex_string)),
+            RestrictedStringBase::IA5String(inner) => (ast::CharsetType::IA5, span(&inner.i_a5_string)),
+            RestrictedStringBase::GraphicString(inner) => (ast::CharsetType::Graphic, span(&inner.graphic_string)),
+            RestrictedStringBase::VisibleString(inner) => (ast::CharsetType::Visible, span(&inner.visible_string)),
+            RestrictedStringBase::ISO646String(inner) => (ast::CharsetType::General, span(&inner.i_s_o646_string)),
+            RestrictedStringBase::GeneralString(inner) => (ast::CharsetType::General, span(&inner.general_string)),
+            RestrictedStringBase::UniversalString(inner) => (ast::CharsetType::Universal, span(&inner.universal_string)),
+            RestrictedStringBase::BMPString(inner) => (ast::CharsetType::BMP, span(&inner.b_m_p_string)),
         };
-        self.type_stack.push(ast::AsnType::RestrictedString { charset, span: s });
+        let constraint = arg.restricted_string_type_opt.as_ref().and_then(|_| self.constraint_stack.pop());
+        self.type_stack.push(ast::AsnType::RestrictedString { charset, constraint, span: s });
         Ok(())
     }
 
     fn unrestricted_string_type(&mut self, arg: &UnrestrictedStringType<'t>) -> Result<()> {
-        self.type_stack.push(ast::AsnType::UnrestrictedString { span: span(&arg.unrestricted_string_type) });
+        let constraint = arg.unrestricted_string_type_opt.as_ref().and_then(|_| self.constraint_stack.pop());
+        self.type_stack.push(ast::AsnType::UnrestrictedString { constraint, span: SourceSpan::from(0..0) });
         Ok(())
     }
 
@@ -1056,6 +1065,70 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
             body,
             span: module_span,
         });
+        Ok(())
+    }
+
+    // === Constraint parsing callbacks ===
+
+    fn constraint(&mut self, arg: &Constraint<'t>) -> Result<()> {
+        let spec = self.constraint_spec_stack.try_pop()?;
+        let s = span(&arg.l_paren);
+        self.constraint_stack.push(ast::Constraint { spec: Box::new(spec), span: s });
+        Ok(())
+    }
+
+    fn constraint_spec(&mut self, arg: &ConstraintSpec<'t>) -> Result<()> {
+        match arg {
+            ConstraintSpec::DotDotValue(_inner) => {
+                let val = self.value_stack.try_pop()?;
+                self.constraint_spec_stack.push(ast::ConstraintSpec::Single(Box::new(
+                    ast::SingleElementConstraint::ValueRange(ast::ValueRange {
+                        min: ast::RangeValue::Min,
+                        max: ast::RangeValue::Value(val),
+                    }),
+                )));
+            }
+            ConstraintSpec::ValueSingleValueOrRange(inner) => {
+                let second_val = self.value_stack.try_pop()?;
+                match &*inner.single_value_or_range {
+                    SingleValueOrRange::DotDotSingleValueOrRangeOpt(_opt) => {
+                        let first_val = self.value_stack.try_pop()?;
+                        self.constraint_spec_stack.push(ast::ConstraintSpec::Single(Box::new(
+                            ast::SingleElementConstraint::ValueRange(ast::ValueRange {
+                                min: ast::RangeValue::Value(first_val),
+                                max: ast::RangeValue::Value(second_val),
+                            }),
+                        )));
+                    }
+                    SingleValueOrRange::SingleValueOrRangeEmpty(_) => {
+                        self.constraint_spec_stack.push(ast::ConstraintSpec::Single(Box::new(
+                            ast::SingleElementConstraint::ValueRange(ast::ValueRange {
+                                min: ast::RangeValue::Value(second_val),
+                                max: ast::RangeValue::Max,
+                            }),
+                        )));
+                    }
+                }
+            }
+            ConstraintSpec::SizeConstraint(_inner) => {
+                let inner_spec = self.constraint_spec_stack.try_pop()?;
+                self.constraint_spec_stack.push(ast::ConstraintSpec::Single(Box::new(
+                    ast::SingleElementConstraint::Size(Box::new(ast::Constraint {
+                        spec: Box::new(inner_spec),
+                        span: SourceSpan::from(0..0),
+                    })),
+                )));
+            }
+            ConstraintSpec::PermittedAlphabet(_inner) => {
+                let inner_spec = self.constraint_spec_stack.try_pop()?;
+                self.constraint_spec_stack.push(ast::ConstraintSpec::Single(Box::new(
+                    ast::SingleElementConstraint::PermittedAlphabet(Box::new(ast::Constraint {
+                        spec: Box::new(inner_spec),
+                        span: SourceSpan::from(0..0),
+                    })),
+                )));
+            }
+        }
         Ok(())
     }
 }
