@@ -12,7 +12,7 @@ asnvil-parser = { path = "../asnvil-parser" }
 asnvil-ir = { path = "../asnvil-ir" }
 asnvil-codegen = { path = "../asnvil-codegen" }
 
-clap.workspace = true
+clap = { version = "4", features = ["derive"] }
 anyhow.workspace = true
 
 [dev-dependencies]

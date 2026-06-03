@@ -13,10 +13,7 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
-parol = { version = "4", features = ["build"] }
-parol_runtime = "4"
 thiserror = "2"
-clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 num-bigint = "0.4"
 miette = { version = "7", features = ["fancy"] }
