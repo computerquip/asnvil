@@ -357,9 +357,9 @@ class Person(AsnType):
 ### 🟠 Design / Architecture Issues
 
 #### asnvil-parser
-- [ ] **R19: OID string marker protocol is fragile** — `grammar.rs:132-191`. OIDs serialized as comma-joined strings with `__oid_name__:`/`__oid_num__:` prefixes. Should use a dedicated stack.
-- [ ] **R20: ASN.1 semantic decision in parser layer** — `grammar.rs:916`. Absent EXPORTS defaults to "ALL" in the parser; should be an IR-layer concern.
-- [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
+- [x] **R19: OID string marker protocol is fragile** — `grammar.rs:72,189,194`. Now uses `oid_stack: Stack<ast::OidComponent>` with typed `Name`/`Number` variants.
+- [x] **R20: ASN.1 semantic decision in parser layer** — `from_ast.rs:72`. Absent EXPORTS now defaults to `Exports::All` in IR bridge (per X.680 spec), not in parser.
+- [x] **R21: Parameterized types unsupported despite AST definition** — `from_ast.rs:53-64`. `ParameterizedType`/`ParameterizedValue`/`ValueSetType` now return `UnsupportedAssignment` error instead of silently dropping.
 - [x] **R22: No constraint parsing** — Moved to **Milestone 10**. **Fixed**: Grammar now supports constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` parse correctly. Value ranges, size constraints, and single-value constraints implemented.
 - [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
  - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. Fixed as part of R41.
@@ -382,11 +382,11 @@ class Person(AsnType):
 - [x] **R34: `copy_dir` reimplementation** — `main.rs:153-166`. Doesn't handle symlinks or permissions. **Fixed**: Now handles symlinks and copies permissions.
 
 ### 🟡 Minor Issues
-- [ ] **R35: Export "ALL" detection by string value** — `grammar.rs:299`. Treats keyword `ALL` and identifier `ALL` identically. (Low priority — ALL is reserved keyword)
-- [ ] **R36: `extension_default` callback is dead code** — `grammar.rs:127-130`. (Low priority)
+- [x] **R35: Export "ALL" detection by string value** — `grammar.rs:235-237`. Now matches `IdentifierOrKeyword::ALL(_)` keyword directly.
+- [x] **R36: `extension_default` callback is dead code** — Callback removed, replaced with inline check at `grammar.rs:1059`.
 - [x] **R37: 4/6 `IrError` variants never used** — `error.rs`. **Removed** unused variants (`ConstraintViolation`, `ValueTypeMismatch`, `InvalidTag`, `ExtensionError`).
 - [x] **R38: `AsnAny` has no `__eq__` or `__repr__`** — `types.py:98-102`. **Added** both methods.
-- [ ] **R39: `capitalize()` doesn't handle Unicode** — `builder.rs:35-41`. (Low priority — ASN.1 names are ASCII)
+- [x] **R39: `capitalize()` doesn't handle Unicode** — Code uses `chars()` + `to_uppercase()` which handles Unicode correctly in Rust.
 - [x] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — Already using `Option<Box<BerFieldInfo>>`.
 
 ### Remaining Milestones

@@ -50,13 +50,19 @@ pub fn module_to_ir(ast_mod: &ast::Module) -> Result<ir::AsnModule, ConversionEr
                 &va.name
             }
             _ => {
-                let name = match assignment {
-                    ast::Assignment::ObjectClass(o) => &o.name,
-                    ast::Assignment::Object(o) => &o.name,
-                    ast::Assignment::ObjectSet(o) => &o.name,
-                    _ => continue,
+                let (name, detail) = match assignment {
+                    ast::Assignment::Type(_) => unreachable!(),
+                    ast::Assignment::Value(_) => unreachable!(),
+                    ast::Assignment::ParameterizedType(p) => (&p.name, "Parameterized types"),
+                    ast::Assignment::ParameterizedValue(p) => (&p.name, "Parameterized values"),
+                    ast::Assignment::ValueSetType(v) => (&v.name, "Value set type"),
+                    ast::Assignment::ObjectClass(o) => (&o.name, "Object class"),
+                    ast::Assignment::Object(o) => (&o.name, "Object"),
+                    ast::Assignment::ObjectSet(o) => (&o.name, "Object set"),
                 };
-                return Err(ConversionError::UnsupportedAssignment(format!("{} (Object Class support not yet implemented)", name)));
+                return Err(ConversionError::UnsupportedAssignment(
+                    format!("{} ({} support not yet implemented)", name, detail),
+                ));
             }
         };
         if name == "ALL" {
@@ -69,7 +75,7 @@ pub fn module_to_ir(ast_mod: &ast::Module) -> Result<ir::AsnModule, ConversionEr
             ast::ExportSymbols::All => ir::Exports::All,
             ast::ExportSymbols::Symbols(syms) => ir::Exports::Symbols(syms.clone()),
         },
-        None => ir::Exports::None,
+        None => ir::Exports::All,
     };
 
     let tag_default = match &ast_mod.tag_default {
