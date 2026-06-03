@@ -151,9 +151,10 @@ cargo run -- --help             # CLI help
 | 7: CHOICE + Indefinite + ANY DEFINED BY | ✅ Done | Explicit tagging, indefinite BER, raw TLV fields |
 | R27: Encoding Logic in Code AST | ✅ Done | EncodeStmt/DecodeStmt, EncodingType enum, language-agnostic TypeRef |
 | Review Backlog | ✅ Done | All serious (R6-R14) and design (R24-R34) items completed |
-| 8: SNMP Integration | Planned | RFC 3416-based integration test |
-| 9: PER/OER/XER/JER | Future | Additional encoding backends |
-| 10: More Languages | Future | Rust, TypeScript, C, Go backends |
+| 10: Constraint Parsing | Planned | Grammar rules, parser callbacks, IR bridge, codegen for validation |
+| 11: SNMP Integration | Planned | RFC 3416-based integration test |
+| 12: PER/OER/XER/JER | Future | Additional encoding backends |
+| 13: More Languages | Future | Rust, TypeScript, C, Go backends |
 
 ## License
 

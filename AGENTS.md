@@ -259,6 +259,12 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Adding a new language requires implementing renderer methods, not duplicating template logic
 - All 144 tests pass identically
 
+**Milestone 10: Constraint Parsing** — Grammar, parser callbacks, AST→IR bridge, codegen for validation
+- Grammar rules for value ranges, size constraints, permitted alphabets, component constraints, extensions
+- Parser callbacks to build constraint AST nodes
+- IR bridge to convert constraint AST → IR (IR structures already defined)
+- Codegen to emit range validation, size checks, etc. in generated code
+
 **Remaining Backlog:**
 - [ ] SNMP integration test (RFC 3416 based)
 - [ ] PER, OER, XER, JER encoding backends
@@ -343,7 +349,7 @@ class Person(AsnType):
 - [ ] **R19: OID string marker protocol is fragile** — `grammar.rs:132-191`. OIDs serialized as comma-joined strings with `__oid_name__:`/`__oid_num__:` prefixes. Should use a dedicated stack.
 - [ ] **R20: ASN.1 semantic decision in parser layer** — `grammar.rs:916`. Absent EXPORTS defaults to "ALL" in the parser; should be an IR-layer concern.
 - [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
-- [ ] **R22: No constraint parsing** — `asn1.par`. Grammar has no constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` cannot be parsed.
+- [ ] **R22: No constraint parsing** — Moved to **Milestone 10**. Grammar has no constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` cannot be parsed.
 - [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
  - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. Fixed as part of R41.
 
@@ -373,10 +379,11 @@ class Person(AsnType):
 - [x] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — Already using `Option<Box<BerFieldInfo>>`.
 
 ### Remaining Milestones
-1. SNMP integration test (RFC 3416 based)
-2. PER, OER, XER, JER encoding backends
-3. Rust, TypeScript, C, Go backends
-4. Inline CHOICE as SEQUENCE field (type annotation improvement)
+1. Milestone 10: Constraint Parsing (grammar, parser, IR bridge, codegen)
+2. SNMP integration test (RFC 3416 based)
+3. PER, OER, XER, JER encoding backends
+4. Rust, TypeScript, C, Go backends
+5. Inline CHOICE as SEQUENCE field (type annotation improvement)
 
 ### Current Test Counts
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
