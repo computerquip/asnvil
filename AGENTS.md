@@ -383,7 +383,9 @@ class Person(AsnType):
 2. SNMP integration test (RFC 3416 based)
 3. PER, OER, XER, JER encoding backends
 4. Rust, TypeScript, C, Go backends
-5. Inline CHOICE as SEQUENCE field (type annotation improvement)
+
+### Backlog (Menial / Polish)
+- Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of generated CHOICE class name (encoding/decoding works correctly — cosmetic only)
 
 ### Current Test Counts
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
