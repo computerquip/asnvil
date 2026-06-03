@@ -1396,7 +1396,7 @@ impl PythonRenderer {
         for a in alternatives {
             if a.ber.is_none() { continue; }
             let ber = a.ber.as_ref().unwrap();
-            if ber.encoding == "referenced" || ber.encoding == "constructed" || ber.encoding == "choice" {
+            if ber.encoding == EncodingType::Referenced || ber.encoding == EncodingType::Constructed || ber.encoding == EncodingType::Choice {
                 out.push_str(&self.render_choice_decode_referenced(a, "BerDecoder", "decode_ber"));
                 out.push('\n');
             } else {
@@ -1418,7 +1418,7 @@ impl PythonRenderer {
         for a in alternatives {
             if a.ber.is_none() { continue; }
             let ber = a.ber.as_ref().unwrap();
-            if ber.encoding == "referenced" || ber.encoding == "constructed" || ber.encoding == "choice" {
+            if ber.encoding == EncodingType::Referenced || ber.encoding == EncodingType::Constructed || ber.encoding == EncodingType::Choice {
                 out.push_str(&self.render_choice_decode_referenced_indefinite(a));
                 out.push('\n');
             } else {
@@ -1437,7 +1437,7 @@ impl PythonRenderer {
         for a in alternatives {
             if a.ber.is_none() { continue; }
             let ber = a.ber.as_ref().unwrap();
-            if ber.encoding == "referenced" || ber.encoding == "constructed" || ber.encoding == "choice" {
+            if ber.encoding == EncodingType::Referenced || ber.encoding == EncodingType::Constructed || ber.encoding == EncodingType::Choice {
                 out.push_str(&self.render_choice_decode_referenced(a, "DerDecoder", "decode_der"));
                 out.push('\n');
             } else {

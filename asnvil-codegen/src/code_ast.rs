@@ -50,7 +50,7 @@ pub enum Declaration {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct BerFieldInfo {
-    pub encoding: String,
+    pub encoding: EncodingType,
     pub tag_class: String,
     pub tag_number: u32,
     pub constructed: bool,
@@ -100,7 +100,7 @@ pub enum EncodeStmt {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ListElementEncodeInfo {
-    pub encoding: String,
+    pub encoding: EncodingType,
     pub tag_number: u32,
     pub string_encoding: String,
     pub referenced_type: String,
@@ -126,7 +126,7 @@ pub enum DecodeStmt {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ListElementDecodeInfo {
-    pub encoding: String,
+    pub encoding: EncodingType,
     pub string_encoding: String,
     pub referenced_type: String,
 }
@@ -183,6 +183,54 @@ pub enum StringEncoding {
     Teletex,
     BMP,
     Universal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+pub enum EncodingType {
+    #[default]
+    Integer,
+    Boolean,
+    String,
+    Bytes,
+    BitString,
+    Oid,
+    Null,
+    Real,
+    Time,
+    Enumerated,
+    Constructed,
+    Choice,
+    List,
+    Referenced,
+    Any,
+}
+
+impl EncodingType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EncodingType::Integer => "integer",
+            EncodingType::Boolean => "boolean",
+            EncodingType::String => "string",
+            EncodingType::Bytes => "bytes",
+            EncodingType::BitString => "bit_string",
+            EncodingType::Oid => "oid",
+            EncodingType::Null => "null",
+            EncodingType::Real => "real",
+            EncodingType::Time => "time",
+            EncodingType::Enumerated => "enumerated",
+            EncodingType::Constructed => "constructed",
+            EncodingType::Choice => "choice",
+            EncodingType::List => "list",
+            EncodingType::Referenced => "referenced",
+            EncodingType::Any => "any",
+        }
+    }
+}
+
+impl std::fmt::Display for EncodingType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
