@@ -266,7 +266,6 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Codegen to emit range validation, size checks, etc. in generated code
 
 **Remaining Backlog:**
-- [ ] SNMP integration test (RFC 3416 based)
 - [ ] PER, OER, XER, JER encoding backends
 - [ ] Rust, TypeScript, C, Go backends
 - [ ] CHOICE as field within SEQUENCE (works for referenced CHOICE types; inline CHOICE type annotation needs improvement)
@@ -380,11 +379,11 @@ class Person(AsnType):
 
 ### Remaining Milestones
 1. Milestone 10: Constraint Parsing (grammar, parser, IR bridge, codegen)
-2. SNMP integration test (RFC 3416 based)
-3. PER, OER, XER, JER encoding backends
-4. Rust, TypeScript, C, Go backends
+2. PER, OER, XER, JER encoding backends
+3. Rust, TypeScript, C, Go backends
 
 ### Backlog (Menial / Polish)
+- SNMP integration test (RFC 3416-based simplified spec, similar to X.509/LDAP)
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of generated CHOICE class name (encoding/decoding works correctly — cosmetic only)
 
 ### Current Test Counts
