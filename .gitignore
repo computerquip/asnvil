@@ -24,4 +24,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Backups
+*.bak
+
 .kilo/
