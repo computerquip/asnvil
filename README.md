@@ -148,7 +148,9 @@ cargo run -- --help             # CLI help
 | 4: Code Generation | ✅ Done | BER encode/decode templates for all type variants |
 | 5: DER Canonicalization | ✅ Done | Sorted SET elements, minimal encoding, strict validation |
 | 6: Integration Tests | ✅ Done | X.509, LDAP roundtrip tests, self-contained runner |
-| 7: CHOICE + Indefinite + ANY DEFINED BY | ✅ Done | Explicit tagging, indefinite BER, raw TLV fields |
+| 7: CHOICE Enhancements | ✅ Done | Explicit/implicit tagging, mixed CHOICE support |
+| 8: Indefinite Length BER | ✅ Done | `encode_ber_indefinite` / `decode_ber_indefinite` for all types |
+| 9: ANY DEFINED BY | ✅ Done | Raw TLV storage with full TLV reconstruction |
 | R27: Encoding Logic in Code AST | ✅ Done | EncodeStmt/DecodeStmt, EncodingType enum, language-agnostic TypeRef |
 | Review Backlog | ✅ Done | All serious (R6-R14) and design (R24-R34) items completed |
 | 10: Constraint Parsing | Planned | Grammar rules, parser callbacks, IR bridge, codegen for validation |
