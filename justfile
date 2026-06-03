@@ -11,7 +11,7 @@ test-rust:
     cargo test --workspace
 
 test-python:
-    uv run --with pytest pytest tests/test_runtime.py
+    uv run --with pytest --with pyyaml pytest tests/test_runtime.py tests/test_runtime_ber_vectors.py
 
 test-integration:
     python3 tests/run_integration.py

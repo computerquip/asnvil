@@ -281,6 +281,10 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - [ ] PER, OER, XER, JER encoding backends
 - [ ] Rust, TypeScript, C, Go backends
 - [ ] CHOICE as field within SEQUENCE (works for referenced CHOICE types; inline CHOICE type annotation needs improvement)
+- [ ] Non-minimal long-form tag validation (decoder currently accepts non-minimal tags)
+- [ ] Recursive type support (parser stack overflows on self-referencing types)
+- [ ] Optional tagged field ordering fix (fields may decode out of order)
+- [ ] **Revisit BER test vector architecture** — `test_runtime_ber_vectors.py` has duplicated hex/file test pairs that are fragile (ber_file path in YAML must match directory structure exactly, DER vs BER error tests need special-case exclusions). Consider: unified test loader that auto-runs both hex and file from one vector, or eliminate file-based tests entirely since hex is authoritative and files are generated from the same data.
 
 **Load the `parol-parser` skill** before working on parser/grammar changes. **Load the `rust-best-practices` skill** before writing or reviewing Rust code. **Load the `askama` skill** before working on templates.
 
@@ -398,15 +402,21 @@ class Person(AsnType):
 - Contained subtype constraints deferred (e.g., `(MySubType)`)
 - Permitted alphabet range handling deferred (e.g., `FROM ("A".."Z")`)
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of generated CHOICE class name (encoding/decoding works correctly — cosmetic only)
+- Recursive self-referencing types cause parser stack overflow (e.g., `RecursiveSeq ::= SEQUENCE { children SEQUENCE OF RecursiveSeq }`)
+- Optional tagged field ordering bug: optional `[N] EXPLICIT` fields in SEQUENCE may decode out of order
 
-### Backlog (Menial / Polish)
-- SNMP integration test (RFC 3416-based simplified spec, similar to X.509/LDAP)
+### Test Architecture
+
+Test vectors are stored in shared YAML files under `tests/vectors/ber/data.yaml`, organized by encoding type (BER, PER, OER). Binary `.ber` files from asn1c are stored under `tests/vectors/ber/data-62/`. Integration tests are organized by language first, then encoding (`tests/integration/python/ber/`). This architecture supports future language targets (Rust, TypeScript, C, Go) and encoding targets (PER, OER, XER, JER).
+
+Test vectors are adapted from the [vlm/asn1c](https://github.com/vlm/asn1c) project (MIT license), including tag encoding, length encoding, INTEGER encoding, and structured BER test vectors from `tests-skeletons` and `tests-c-compiler/data-62/`.
 
 ### Current Test Counts
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
-- Python: 55 runtime unit tests
-- Integration: 6 suites, 59 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 9 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types)
-- **Total: 162 tests**
+- Python runtime: 55 unit tests
+- Python BER vectors: 109 tests (19 tag + 9 length + 30 integer + 16 structured + 28 error + 7 DER error)
+- Integration: 9 suites, 87 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 10 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types + 10 any decode + 8 multi-tag + 10 embedded choice)
+- **Total: 299 tests**
 
 ### Milestone 10: Constraint Parsing ✅ COMPLETE
 

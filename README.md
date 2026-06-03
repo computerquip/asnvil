@@ -75,9 +75,26 @@ Options:
 | asnvil-codegen | 12 Rust unit tests | ✅ |
 | asnvil (CLI) | 13 Rust unit tests | ✅ |
 | Python runtime | 55 unit tests | ✅ |
-| Integration | 6 suites, 59 roundtrip tests | ✅ |
+| Python BER vectors | 82 vector tests | ✅ |
+| Integration | 9 suites, 87 roundtrip tests | ✅ |
 
-**Total: 48 Rust tests + 114 Python tests (162 total)**
+**Total: 48 Rust tests + 219 Python tests (267 total)**
+
+### BER Test Vectors
+
+Our test suite includes test vectors adapted from the [vlm/asn1c](https://github.com/vlm/asn1c)
+project (MIT license). Specifically, BER encoding test vectors from `tests-skeletons` and
+`tests-c-compiler` have been converted to YAML format (`tests/vectors/ber/data.yaml`) and
+integrated into our test suite. Binary `.ber` files from the asn1c `data-62` test directory
+are included under `tests/vectors/ber/data-62/`. We thank the asn1c maintainers for their
+comprehensive test coverage, which helps ensure our BER/DER encoder correctness.
+
+### Test Architecture
+
+Test vectors are stored in shared YAML files under `tests/vectors/ber/`, organized by
+encoding type (BER, PER, OER). Integration tests are organized by language first, then
+encoding (`tests/integration/python/ber/`). This architecture supports future language
+targets (Rust, TypeScript, C, Go) and encoding targets (PER, OER, XER, JER).
 
 ### Running Tests
 
@@ -157,8 +174,9 @@ cargo run -- --help             # CLI help
 | Review Backlog | ✅ Done | All serious (R6-R14) and design (R24-R34) items completed |
 | 10: Constraint Parsing | ✅ Done | Grammar rules, parser callbacks, IR bridge, codegen for validation |
 | 11: SNMP Integration | ✅ Done | RFC 3416-based integration test |
-| 12: PER/OER/XER/JER | Future | Additional encoding backends |
-| 13: More Languages | Future | Rust, TypeScript, C, Go backends |
+| 12: Test Vector Expansion | ✅ Done | BER test vectors from asn1c, shared YAML format, language-first organization |
+| 13: PER/OER/XER/JER | Future | Additional encoding backends |
+| 14: More Languages | Future | Rust, TypeScript, C, Go backends |
 
 ## License
 

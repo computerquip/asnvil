@@ -1,0 +1,24 @@
+-- Embedded choice test module
+-- Tests embedded CHOICE with AUTOMATIC TAGS
+
+EmbeddedChoiceModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EmbeddedChoice ::= CHOICE {
+    integer     INTEGER,
+    string      UTF8String,
+    octet       OCTET STRING
+}
+
+Container ::= SEQUENCE {
+    id      INTEGER,
+    value   EmbeddedChoice
+}
+
+ExtendedSequence ::= SEQUENCE {
+    name    UTF8String,
+    value   INTEGER,
+    extra   UTF8String OPTIONAL
+}
+
+END
+;

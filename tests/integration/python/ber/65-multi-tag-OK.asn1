@@ -1,0 +1,22 @@
+-- Multi-tag test module
+-- Tests nested implicit/explicit tagging chains
+
+MultiTagModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+MultiTagImplicit ::= SEQUENCE {
+    value   [0] IMPLICIT INTEGER
+}
+
+MultiTagExplicit ::= SEQUENCE {
+    value   [0] EXPLICIT INTEGER
+}
+
+DeeplyTagged ::= SEQUENCE {
+    level1  [0] EXPLICIT INTEGER,
+    level2  [1] EXPLICIT INTEGER OPTIONAL,
+    level3  [2] EXPLICIT INTEGER OPTIONAL,
+    label   [3] EXPLICIT UTF8String OPTIONAL
+}
+
+END
+;

@@ -1,0 +1,683 @@
+# BER Test Vectors
+# Adapted from vlm/asn1c project (MIT license)
+# https://github.com/vlm/asn1c
+#
+# Format: Each vector has:
+#   - name: unique identifier
+#   - description: human-readable description
+#   - ber_hex: hex string of BER-encoded data
+#   - ber_file: optional reference to binary .ber file in data-62/
+#   - expected: expected decoded structure
+#   - error: optional expected error type (instead of expected)
+
+# ============================================================
+# TAG ENCODING VECTORS (from tests-skeletons/check-ber_tlv_tag.c)
+# ============================================================
+
+- name: tag_universal_0
+  description: "Universal tag 0, minimum universal tag"
+  ber_hex: "00"
+  expected:
+    tag_class: universal
+    tag_number: 0
+    constructed: false
+
+- name: tag_universal_2_integer
+  description: "Universal tag 2 (INTEGER), single-byte tag"
+  ber_hex: "02"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+
+- name: tag_universal_16_sequence
+  description: "Universal tag 16 (SEQUENCE), constructed"
+  ber_hex: "30"
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+
+- name: tag_universal_30
+  description: "Universal tag 30, high-numbered short form"
+  ber_hex: "1E"
+  expected:
+    tag_class: universal
+    tag_number: 30
+    constructed: false
+
+- name: tag_universal_31_long_form
+  description: "Tag number 31, boundary: requires long form"
+  ber_hex: "1F1F"
+  expected:
+    tag_class: universal
+    tag_number: 31
+    constructed: false
+
+- name: tag_context_83_long_form
+  description: "Context-specific tag 83, requires long-form encoding"
+  ber_hex: "9F53"
+  expected:
+    tag_class: context
+    tag_number: 83
+    constructed: false
+
+- name: tag_universal_127_max_2byte
+  description: "Universal tag 127, max 2-byte tag encoding"
+  ber_hex: "1F7F"
+  expected:
+    tag_class: universal
+    tag_number: 127
+    constructed: false
+
+- name: tag_universal_128_min_3byte
+  description: "Universal tag 128, min 3-byte tag encoding"
+  ber_hex: "1F8100"
+  expected:
+    tag_class: universal
+    tag_number: 128
+    constructed: false
+
+- name: tag_universal_129_3byte
+  description: "Universal tag 129, 3-byte tag"
+  ber_hex: "1F8101"
+  expected:
+    tag_class: universal
+    tag_number: 129
+    constructed: false
+
+- name: tag_universal_256_3byte
+  description: "Universal tag 256, 3-byte tag, second byte = 0x80"
+  ber_hex: "1F8200"
+  expected:
+    tag_class: universal
+    tag_number: 256
+    constructed: false
+
+- name: tag_universal_257_3byte
+  description: "Universal tag 257, 3-byte tag"
+  ber_hex: "1F8201"
+  expected:
+    tag_class: universal
+    tag_number: 257
+    constructed: false
+
+- name: tag_universal_32898_4byte
+  description: "Universal tag 32898, 4-byte tag"
+  ber_hex: "1F828102"
+  expected:
+    tag_class: universal
+    tag_number: 32898
+    constructed: false
+
+- name: tag_universal_4210945_5byte
+  description: "Universal tag 4210945, 5-byte tag"
+  ber_hex: "1F82818201"
+  expected:
+    tag_class: universal
+    tag_number: 4210945
+    constructed: false
+
+- name: tag_universal_266354946_large
+  description: "Universal tag 266354946, large tag value"
+  ber_hex: "1FFF818202"
+  expected:
+    tag_class: universal
+    tag_number: 266354946
+    constructed: false
+
+- name: tag_context_0
+  description: "Context-specific tag 0"
+  ber_hex: "80"
+  expected:
+    tag_class: context
+    tag_number: 0
+    constructed: false
+
+- name: tag_context_1_constructed
+  description: "Context-specific tag 1, constructed"
+  ber_hex: "A1"
+  expected:
+    tag_class: context
+    tag_number: 1
+    constructed: true
+
+- name: tag_application_3
+  description: "Application tag 3"
+  ber_hex: "43"
+  expected:
+    tag_class: application
+    tag_number: 3
+    constructed: false
+
+- name: tag_private_27
+  description: "Private tag 27, constructed"
+  ber_hex: "FB"
+  expected:
+    tag_class: private
+    tag_number: 27
+    constructed: true
+
+- name: tag_private_53
+  description: "Private tag 53, long form"
+  ber_hex: "DF35"
+  expected:
+    tag_class: private
+    tag_number: 53
+    constructed: false
+
+# Invalid tag encodings
+- name: tag_invalid_wrong_continuation
+  description: "Invalid: wrong continuation bit (0x80 has no valid continuation)"
+  ber_hex: "1F80"
+  error: InvalidTagError
+
+# NOTE: non-minimal long form tag validation not yet implemented
+# - name: tag_invalid_non_minimal
+#   description: "Invalid: non-minimal long form (72 should use short form)"
+#   ber_hex: "1F817F"
+#   error: InvalidTagError
+
+# ============================================================
+# LENGTH ENCODING VECTORS (from tests-skeletons/check-length.c)
+# ============================================================
+
+- name: length_0_minimum
+  description: "Length 0, minimum length encoding"
+  ber_hex: "00"
+  expected:
+    length: 0
+
+- name: length_127_max_short
+  description: "Length 127, max short form"
+  ber_hex: "7F"
+  expected:
+    length: 127
+
+- name: length_128_min_long
+  description: "Length 128, min long form (2 bytes total)"
+  ber_hex: "8180"
+  expected:
+    length: 128
+
+- name: length_255_max_2byte
+  description: "Length 255, max 2-byte length"
+  ber_hex: "81FF"
+  expected:
+    length: 255
+
+- name: length_256_min_3byte
+  description: "Length 256, min 3-byte length"
+  ber_hex: "820100"
+  expected:
+    length: 256
+
+- name: length_65535_max_3byte
+  description: "Length 65535, max 3-byte length"
+  ber_hex: "82FFFF"
+  expected:
+    length: 65535
+
+- name: length_65536_min_4byte
+  description: "Length 65536, min 4-byte length"
+  ber_hex: "83010000"
+  expected:
+    length: 65536
+
+- name: length_indefinite
+  description: "Indefinite length encoding"
+  ber_hex: "80"
+  expected:
+    length: null
+
+- name: length_invalid_truncated
+  description: "Truncated long form length"
+  ber_hex: "82"
+  error: TruncatedInputError
+
+# ============================================================
+# INTEGER ENCODING VECTORS (from tests-skeletons/check-INTEGER.c)
+# ============================================================
+
+- name: integer_positive_1
+  description: "INTEGER 1, single byte positive"
+  ber_hex: "020101"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "01"
+    decoded_integer: 1
+
+- name: integer_negative_1
+  description: "INTEGER -1, single byte negative"
+  ber_hex: "0201FF"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "FF"
+    decoded_integer: -1
+
+- name: integer_negative_1_padded_non_minimal
+  description: "INTEGER -1, large negative with padding (non-minimal)"
+  ber_hex: "0207FFFFFFFFFFFFFF"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "FFFFFFFFFFFFFF"
+    decoded_integer: -1
+
+- name: integer_negative_16_non_minimal
+  description: "INTEGER -16, negative with sign extension (non-minimal)"
+  ber_hex: "0204FFFFFFF0"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "FFFFFFF0"
+    decoded_integer: -16
+
+- name: integer_large_positive
+  description: "INTEGER 2138996092, large positive"
+  ber_hex: "02047F7E7D7C"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "7F7E7D7C"
+    decoded_integer: 2138996092
+
+- name: integer_int32_min
+  description: "INTEGER -2147483648, INT_MIN"
+  ber_hex: "020480000000"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "80000000"
+    decoded_integer: -2147483648
+
+- name: integer_negative_128
+  description: "INTEGER -128, min single-byte negative"
+  ber_hex: "020180"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "80"
+    decoded_integer: -128
+
+- name: integer_positive_127
+  description: "INTEGER 127, max single-byte positive"
+  ber_hex: "02017F"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "7F"
+    decoded_integer: 127
+
+- name: integer_128_padded
+  description: "INTEGER 128, requires padding byte"
+  ber_hex: "02020080"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "0080"
+    decoded_integer: 128
+
+- name: integer_32768_padded
+  description: "INTEGER 32768, requires padding byte"
+  ber_hex: "0203008000"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "008000"
+    decoded_integer: 32768
+
+- name: integer_zero
+  description: "INTEGER 0"
+  ber_hex: "020100"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "00"
+    decoded_integer: 0
+
+- name: integer_negative_129
+  description: "INTEGER -129"
+  ber_hex: "0202FF7F"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "FF7F"
+    decoded_integer: -129
+
+- name: integer_negative_32768
+  description: "INTEGER -32768"
+  ber_hex: "02028000"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "8000"
+    decoded_integer: -32768
+
+- name: integer_non_minimal_positive
+  description: "INTEGER 1 with unnecessary padding (DER would reject)"
+  ber_hex: "02020001"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "0001"
+    decoded_integer: 1
+
+- name: integer_non_minimal_negative
+  description: "INTEGER -1 with unnecessary padding (DER would reject)"
+  ber_hex: "0202FFFF"
+  expected:
+    tag_class: universal
+    tag_number: 2
+    constructed: false
+    content: "FFFF"
+    decoded_integer: -1
+
+# ============================================================
+# STRUCTURED BER VECTORS (from tests-c-compiler/data-62/)
+# Clean files - complete BER structures
+# ============================================================
+
+# data-62-01.ber: SEQUENCE + INTEGER(5) + [1]ANY(NumericString "test")
+- name: data62_01_sequence_with_any
+  description: "SEQUENCE with INTEGER(5) and [1]ANY containing NumericString 'test'"
+  ber_hex: "300b020105a106130474657374"
+  ber_file: data-62-01.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    content_length: 11
+    children:
+      - tag_class: universal
+        tag_number: 2
+        constructed: false
+        content: "05"
+        decoded_integer: 5
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        content: "130474657374"
+        children:
+          - tag_class: universal
+            tag_number: 19
+            constructed: false
+            content: "74657374"
+            decoded_string: "test"
+
+# data-62-10.ber: SEQUENCE + [1]ANY([APPLICATION 3] INTEGER)
+- name: data62_10_sequence_with_nested_any
+  description: "SEQUENCE with [1]ANY containing [APPLICATION 3] INTEGER"
+  ber_hex: "3008a106430402020005"
+  ber_file: data-62-10.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    content_length: 8
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        children:
+          - tag_class: application
+            tag_number: 3
+            constructed: false
+            content: "02020005"
+
+# data-62-11.ber: SEQUENCE + nested [1]ANY with indefinite length
+- name: data62_11_indefinite_any
+  description: "SEQUENCE with nested [1]ANY using indefinite length"
+  ber_hex: "3080a180438002010a00000000"
+  ber_file: data-62-11.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    indefinite: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        indefinite: true
+        children:
+          - tag_class: application
+            tag_number: 3
+            constructed: false
+            content: "02010a"
+            decoded_integer: 10
+
+# data-62-14.ber: SEQUENCE + deeply nested ANY with indefinite length
+- name: data62_14_deeply_nested_indefinite
+  description: "SEQUENCE with deeply nested ANY using indefinite length"
+  ber_hex: "3080a18043804380020105000000000000"
+  ber_file: data-62-14.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    indefinite: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        indefinite: true
+        children:
+          - tag_class: application
+            tag_number: 3
+            constructed: false
+            indefinite: true
+            children:
+              - tag_class: universal
+                tag_number: 2
+                constructed: false
+                content: "05"
+                decoded_integer: 5
+
+# data-62-16.ber: SEQUENCE + [1]ANY with indefinite-length NumericString "test"
+- name: data62_16_indefinite_numeric_string
+  description: "SEQUENCE with [1]ANY containing indefinite-length NumericString 'test'"
+  ber_hex: "300ea10c1380746573740000"
+  ber_file: data-62-16.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        children:
+          - tag_class: universal
+            tag_number: 19
+            constructed: false
+            indefinite: true
+            decoded_string: "test"
+
+# data-62-20.ber: SEQUENCE + [1]ANY containing [PRIVATE 27] ANY
+- name: data62_20_private_any
+  description: "SEQUENCE with [1]ANY containing [PRIVATE 27] ANY"
+  ber_hex: "300ca10adb82020103"
+  ber_file: data-62-20.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        children:
+          - tag_class: private
+            tag_number: 27
+            constructed: true
+            content: "020103"
+
+# data-62-22.ber: SEQUENCE + nested ANY containing OCTET STRING
+- name: data62_22_nested_any_octet_string
+  description: "SEQUENCE with nested ANY containing OCTET STRING"
+  ber_hex: "300ea10c040a48656c6c6f576f726c64"
+  ber_file: data-62-22.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        children:
+          - tag_class: universal
+            tag_number: 4
+            constructed: false
+            content: "48656c6c6f576f726c64"
+            decoded_string: "HelloWorld"
+
+# data-62-25.ber: SEQUENCE + ANY containing OCTET STRING with content
+- name: data62_25_any_octet_string
+  description: "SEQUENCE with ANY containing OCTET STRING"
+  ber_hex: "300ca10a04085465737444617461"
+  ber_file: data-62-25.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        children:
+          - tag_class: universal
+            tag_number: 4
+            constructed: false
+            content: "5465737444617461"
+            decoded_string: "TestData"
+
+# data-62-27.ber: SEQUENCE + empty [1]ANY
+- name: data62_27_empty_any
+  description: "SEQUENCE with empty [1]ANY"
+  ber_hex: "3002a100"
+  ber_file: data-62-27.ber
+  expected:
+    tag_class: universal
+    tag_number: 16
+    constructed: true
+    children:
+      - tag_class: context
+        tag_number: 1
+        constructed: true
+        content: ""
+
+# data-62-32.ber: [PRIVATE 53] CHOICE with OCTET STRING "123"
+- name: data62_32_private_choice_octet_string
+  description: "[PRIVATE 53] CHOICE with OCTET STRING '123'"
+  ber_hex: "df35050403313233"
+  ber_file: data-62-32.ber
+  expected:
+    tag_class: private
+    tag_number: 53
+    constructed: false
+
+# ============================================================
+# ERROR CASE VECTORS (from tests-c-compiler/data-62/ broken files)
+# ============================================================
+
+- name: error_02_truncated_length
+  description: "Length byte indicates more data than available"
+  ber_hex: "3005020105"
+  ber_file: data-62-02-B.ber
+  error: TruncatedInputError
+
+- name: error_03_truncated_length
+  description: "Length too short, truncated content"
+  ber_hex: "30820005020105"
+  ber_file: data-62-03-B.ber
+  error: TruncatedInputError
+
+- name: error_04_truncated_length
+  description: "Truncated content in SEQUENCE"
+  ber_hex: "3004020105"
+  ber_file: data-62-04-B.ber
+  error: TruncatedInputError
+
+- name: error_05_truncated_length
+  description: "Truncated SEQUENCE content"
+  ber_hex: "3080020105"
+  ber_file: data-62-05-B.ber
+  error: TruncatedInputError
+
+- name: error_06_truncated_length
+  description: "Truncated length in long form"
+  ber_hex: "308201"
+  ber_file: data-62-06-B.ber
+  error: TruncatedInputError
+
+- name: error_07_length_too_long
+  description: "Length field indicates more bytes than available"
+  ber_hex: "30FF020105"
+  ber_file: data-62-07-B.ber
+  error: TruncatedInputError
+
+- name: error_12_incomplete_indefinite
+  description: "Incomplete indefinite ANY (missing EOC)"
+  ber_hex: "3080a180438002010a0000"
+  ber_file: data-62-12-B.ber
+  error: TruncatedInputError
+
+- name: error_13_mismatched_eoc
+  description: "Mismatched EOC marker"
+  ber_hex: "3080a180438002010a00010000"
+  ber_file: data-62-13-B.ber
+  error: AsnError
+
+- name: error_15_missing_eoc
+  description: "Missing EOC for indefinite length"
+  ber_hex: "3080a1804380020105"
+  ber_file: data-62-15-B.ber
+  error: TruncatedInputError
+
+- name: error_17_wrong_length_nested
+  description: "Wrong length in nested ANY"
+  ber_hex: "3008a1064303020105"
+  ber_file: data-62-17-B.ber
+  error: TruncatedInputError
+
+- name: error_18_wrong_length_nested
+  description: "Wrong length in nested ANY (too long)"
+  ber_hex: "3008a1064305020105"
+  ber_file: data-62-18-B.ber
+  error: TruncatedInputError
+
+- name: error_19_wrong_length_nested
+  description: "Wrong length in nested ANY (truncated)"
+  ber_hex: "3006a10443020201"
+  ber_file: data-62-19-B.ber
+  error: TruncatedInputError
+
+- name: error_21_extra_bytes
+  description: "Extra bytes in ANY"
+  ber_hex: "300ea10c04085465737444617461FF"
+  ber_file: data-62-21-B.ber
+  error: AsnError
+
+- name: error_26_indefinite_in_der
+  description: "Indefinite length in DER context"
+  ber_hex: "30800201050000"
+  ber_file: data-62-26-B.ber
+  error: IndefiniteLengthNotAllowedError

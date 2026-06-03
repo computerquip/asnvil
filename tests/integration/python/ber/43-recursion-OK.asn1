@@ -1,0 +1,22 @@
+-- Recursive types test module
+-- Tests recursive types (SET OF self, SEQUENCE OF self, recursive CHOICE)
+
+RecursionModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+RecursiveSeq ::= SEQUENCE {
+    value       INTEGER,
+    children    SEQUENCE OF RecursiveSeq
+}
+
+RecursiveSet ::= SEQUENCE {
+    value       INTEGER,
+    children    SET OF RecursiveSet
+}
+
+RecursiveChoice ::= CHOICE {
+    leaf        INTEGER,
+    nested      RecursiveChoice
+}
+
+END
+;

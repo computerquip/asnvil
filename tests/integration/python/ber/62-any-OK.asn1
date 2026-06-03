@@ -1,0 +1,28 @@
+-- 62-any-OK.asn1
+-- Adapted from vlm/asn1c tests-c-compiler/data-62/
+-- Tests ANY, SEQUENCE with ANY, SET with ANY, CHOICE with ANY
+
+AnyTestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+T1Ext ::= SEQUENCE {
+    i       INTEGER,
+    any     ANY OPTIONAL
+}
+
+T2 ::= SEQUENCE {
+    nested  [1] EXPLICIT ANY
+}
+
+T3Set ::= SET {
+    a       INTEGER,
+    any     ANY OPTIONAL
+}
+
+T4Choice ::= CHOICE {
+    octet       OCTET STRING,
+    integer     INTEGER,
+    any         [0] EXPLICIT ANY
+}
+
+END
+;
