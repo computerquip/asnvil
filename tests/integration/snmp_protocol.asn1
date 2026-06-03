@@ -1,0 +1,71 @@
+-- Simplified SNMP Protocol Module
+-- Based on RFC 3416 SNMPv2-MIB
+-- Simplified to work within current compiler capabilities
+
+SNMPv2MIB DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+Counter32 ::= INTEGER
+
+Gauge32 ::= INTEGER
+
+TimeTicks ::= INTEGER
+
+VarBind ::= SEQUENCE {
+    name        OBJECT IDENTIFIER,
+    value       SnmpSyntax
+}
+
+VarBindList ::= SEQUENCE OF VarBind
+
+SnmpSyntax ::= CHOICE {
+    integerValue  INTEGER,
+    stringValue   OCTET STRING,
+    nullValue     NULL,
+    oidValue      OBJECT IDENTIFIER,
+    counterValue  Counter32,
+    gaugeValue    Gauge32,
+    timeticksValue TimeTicks
+}
+
+GetRequest ::= SEQUENCE {
+    requestId         INTEGER,
+    errorStatus       INTEGER,
+    errorIndex        INTEGER,
+    variableBindings  VarBindList
+}
+
+GetResponse ::= SEQUENCE {
+    requestId         INTEGER,
+    errorStatus       INTEGER,
+    errorIndex        INTEGER,
+    variableBindings  VarBindList
+}
+
+SetRequest ::= SEQUENCE {
+    requestId         INTEGER,
+    errorStatus       INTEGER,
+    errorIndex        INTEGER,
+    variableBindings  VarBindList
+}
+
+GetBulkRequest ::= SEQUENCE {
+    requestId         INTEGER,
+    nonRepeaters      INTEGER,
+    maxRepetitions    INTEGER,
+    variableBindings  VarBindList
+}
+
+SNMPv2Messages ::= CHOICE {
+    getRequest     GetRequest,
+    getResponse    GetResponse,
+    setRequest     SetRequest,
+    getBulkRequest GetBulkRequest
+}
+
+SNMPv2Message ::= SEQUENCE {
+    version     INTEGER,
+    community   OCTET STRING,
+    data        SNMPv2Messages
+}
+
+END;

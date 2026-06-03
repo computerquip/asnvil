@@ -200,7 +200,7 @@ impl CodeAstBuilder {
                         let ty_ref = if is_inline_type(resolved) {
                             TypeRef::Named(Self::inline_type_name(name, &a.name))
                         } else {
-                            self.build_type(&a.ty)
+                            self.build_type(&a.ty, Some(name), Some(&a.name))
                         };
                         let ber = Some(self.ber_info_for_type(&a.ty));
                         let encode_stmts = ber.as_ref().map(|b| Self::build_choice_encode_stmts(&a.name, b)).unwrap_or_default();
@@ -219,7 +219,7 @@ impl CodeAstBuilder {
                         let ty_ref = if is_inline_type(resolved) {
                             TypeRef::Named(Self::inline_type_name(name, &a.name))
                         } else {
-                            self.build_type(&a.ty)
+                            self.build_type(&a.ty, Some(name), Some(&a.name))
                         };
                         let ber = Some(self.ber_info_for_type(&a.ty));
                         let encode_stmts = ber.as_ref().map(|b| Self::build_choice_encode_stmts(&a.name, b)).unwrap_or_default();
@@ -295,7 +295,7 @@ impl CodeAstBuilder {
             _ => {
                 decls.push(Declaration::TypeAlias {
                     name: name.to_string(),
-                    target: self.build_type(ty),
+                    target: self.build_type(ty, Some(name), None),
                 });
             }
         }
@@ -312,9 +312,9 @@ impl CodeAstBuilder {
                 TypeRef::Named(gen_name)
             }
         } else if f.optional || f.default.is_some() {
-            TypeRef::Optional(Box::new(self.build_type(&f.ty)))
+            TypeRef::Optional(Box::new(self.build_type(&f.ty, Some(parent_name), Some(&f.name))))
         } else {
-            self.build_type(&f.ty)
+            self.build_type(&f.ty, Some(parent_name), Some(&f.name))
         };
 
         let ber = Some(self.ber_info_for_field(&f.ty, parent_name, &f.name));
@@ -479,7 +479,7 @@ impl CodeAstBuilder {
                         let decode_stmts = ber.as_ref().map(|b| Self::build_choice_decode_stmts(&a.name, b)).unwrap_or_default();
                         CodeChoiceAlt {
                             name: a.name.clone(),
-                            ty: self.build_type(&a.ty),
+                            ty: self.build_type(&a.ty, Some(&assignment.name), Some(&a.name)),
                             ber,
                             encode_stmts,
                             decode_stmts,
@@ -492,7 +492,7 @@ impl CodeAstBuilder {
                         let decode_stmts = ber.as_ref().map(|b| Self::build_choice_decode_stmts(&a.name, b)).unwrap_or_default();
                         CodeChoiceAlt {
                             name: a.name.clone(),
-                            ty: self.build_type(&a.ty),
+                            ty: self.build_type(&a.ty, Some(&assignment.name), Some(&a.name)),
                             ber,
                             encode_stmts,
                             decode_stmts,
@@ -539,7 +539,7 @@ impl CodeAstBuilder {
             AsnType::SequenceOf { element_type } => {
                 vec![Declaration::ListType {
                     name: assignment.name.clone(),
-                    element_type: self.build_type(element_type),
+                    element_type: self.build_type(element_type, Some(&assignment.name), None),
                     ber: self.ber_info_for_type(&AsnType::SequenceOf { element_type: element_type.clone() }),
                     doc_comment: None,
                 }]
@@ -547,7 +547,7 @@ impl CodeAstBuilder {
             AsnType::SetOf { element_type } => {
                 vec![Declaration::ListType {
                     name: assignment.name.clone(),
-                    element_type: self.build_type(element_type),
+                    element_type: self.build_type(element_type, Some(&assignment.name), None),
                     ber: self.ber_info_for_type(&AsnType::SetOf { element_type: element_type.clone() }),
                     doc_comment: None,
                 }]
@@ -623,7 +623,7 @@ impl CodeAstBuilder {
             AsnType::ConstrainedType { base, .. } => {
                 vec![Declaration::TypeAlias {
                     name: assignment.name.clone(),
-                    target: self.build_type(base),
+                    target: self.build_type(base, Some(&assignment.name), None),
                 }]
             }
             AsnType::ReferencedType { name, .. } => {
@@ -669,9 +669,9 @@ impl CodeAstBuilder {
                 TypeRef::Named(gen_name)
             }
         } else if f.optional || f.default.is_some() {
-            TypeRef::Optional(Box::new(self.build_type(&f.ty)))
+            TypeRef::Optional(Box::new(self.build_type(&f.ty, Some(parent_name), Some(&f.name))))
         } else {
-            self.build_type(&f.ty)
+            self.build_type(&f.ty, Some(parent_name), Some(&f.name))
         };
 
         let ber = Some(self.ber_info_for_field(&f.ty, parent_name, &f.name));
@@ -1028,7 +1028,7 @@ impl CodeAstBuilder {
         }
     }
 
-    fn build_type(&self, ty: &AsnType) -> TypeRef {
+    fn build_type(&self, ty: &AsnType, parent_name: Option<&str>, field_name: Option<&str>) -> TypeRef {
         match ty {
             AsnType::Boolean => TypeRef::Builtin(BuiltinType::Boolean),
             AsnType::Integer { .. } => TypeRef::Builtin(BuiltinType::Integer),
@@ -1041,10 +1041,10 @@ impl CodeAstBuilder {
                 TypeRef::Builtin(BuiltinType::OctetString)
             }
             AsnType::SequenceOf { element_type } => {
-                TypeRef::List(Box::new(self.build_type(element_type)))
+                TypeRef::List(Box::new(self.build_type(element_type, None, None)))
             }
             AsnType::SetOf { element_type } => {
-                TypeRef::List(Box::new(self.build_type(element_type)))
+                TypeRef::List(Box::new(self.build_type(element_type, None, None)))
             }
             AsnType::BitString { .. } => TypeRef::Builtin(BuiltinType::BitString),
             AsnType::ObjectIdentifier => TypeRef::Builtin(BuiltinType::ObjectIdentifier),
@@ -1053,13 +1053,16 @@ impl CodeAstBuilder {
             AsnType::GeneralizedTime => TypeRef::Builtin(BuiltinType::GeneralizedTime),
             AsnType::UTCTime => TypeRef::Builtin(BuiltinType::UTCTime),
             AsnType::Real => TypeRef::Builtin(BuiltinType::Real),
-            AsnType::ConstrainedType { base, .. } => self.build_type(base),
-            AsnType::Tagged { inner, .. } => self.build_type(inner),
+            AsnType::ConstrainedType { base, .. } => self.build_type(base, None, None),
+            AsnType::Tagged { inner, .. } => self.build_type(inner, None, None),
             AsnType::OpenType { .. } => TypeRef::Builtin(BuiltinType::Any),
             AsnType::Any => TypeRef::Builtin(BuiltinType::Any),
-            AsnType::Choice { .. } => {
-                // TODO: generate inline CHOICE class name for referenced CHOICE fields
-                TypeRef::Builtin(BuiltinType::Any)
+            AsnType::Choice { .. } | AsnType::Sequence { .. } | AsnType::Set { .. } => {
+                if let (Some(parent), Some(field)) = (parent_name, field_name) {
+                    TypeRef::Named(Self::inline_type_name(parent, field))
+                } else {
+                    TypeRef::Builtin(BuiltinType::Any)
+                }
             }
             _ => TypeRef::Builtin(BuiltinType::Any),
         }

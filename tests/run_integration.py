@@ -24,6 +24,7 @@ TEST_SPECS: list[tuple[Path, Path]] = [
     (TESTS_DIR / "any_defined_by.asn1", TESTS_DIR / "test_any_defined_by.py"),
     (INTEGRATION_DIR / "x509_certificate.asn1", INTEGRATION_DIR / "test_x509_roundtrip.py"),
     (INTEGRATION_DIR / "ldap_protocol.asn1", INTEGRATION_DIR / "test_ldap_roundtrip.py"),
+    (INTEGRATION_DIR / "snmp_protocol.asn1", INTEGRATION_DIR / "test_snmp_roundtrip.py"),
 ]
 
 

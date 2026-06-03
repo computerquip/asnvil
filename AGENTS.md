@@ -187,7 +187,7 @@ just test-all           # Everything
 - All 9 explicit CHOICE roundtrip tests PASS
 - All 9 indefinite BER roundtrip tests PASS
 - ANY DEFINED BY roundtrip verified
-- **Total: 48 roundtrip tests + 9 indefinite BER tests passing**
+- **Total: 50 roundtrip tests + 9 indefinite BER tests passing**
 
 #### Known Limitations
 - `decode_ber` not generated for non-CHOICE types (only `decode_der` exists — DER is the target)
@@ -390,4 +390,4 @@ class Person(AsnType):
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
 - Python: 55 runtime unit tests
 - Integration: 5 suites, 41 roundtrip tests
-- **Total: 144 tests**
+- **Total: 153 tests**
