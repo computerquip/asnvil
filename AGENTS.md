@@ -36,7 +36,7 @@ ASN.1 source (.asn1)
 
 | File | What It Is |
 |---|---|
-| `asnvil-parser/src/asn1.par` | Full ASN.1 grammar (172 lines, X.680–X.683) |
+| `asnvil-parser/src/asn1.par` | Full ASN.1 grammar (~209 lines, X.680–X.683 + constraints) |
 | `asnvil-parser/build.rs` | Parol code generation + inner-attribute stripping |
 | `asnvil-parser/src/lib.rs` | Module includes for generated parser/trait/scanner |
 | `asnvil-parser/src/grammar.rs` | User-defined `Grammar<'t>` implementing `GrammarTrait` |
@@ -100,7 +100,7 @@ just test-all                  # Run all tests (Rust + Python + integration)
 ```bash
 just test-rust          # 48 Rust unit tests
 just test-python        # 55 Python runtime tests
-just test-integration   # 5 integration suites (41 tests)
+just test-integration   # 6 integration suites (59 tests)
 just test-all           # Everything
 ```
 
@@ -184,15 +184,21 @@ just test-all           # Everything
 - All 12 existing roundtrip tests PASS
 - All 9 X.509 roundtrip tests PASS
 - All 9 LDAP roundtrip tests PASS
+- All 9 SNMP roundtrip tests PASS
 - All 9 explicit CHOICE roundtrip tests PASS
 - All 9 indefinite BER roundtrip tests PASS
-- ANY DEFINED BY roundtrip verified
-- **Total: 50 roundtrip tests + 9 indefinite BER tests passing**
+- All 9 inline CHOICE roundtrip tests PASS
+- All 5 ANY DEFINED BY roundtrip tests PASS
+- All 9 constrained types roundtrip tests PASS
+- **Total: 70 roundtrip tests passing**
 
 #### Known Limitations
 - `decode_ber` not generated for non-CHOICE types (only `decode_der` exists — DER is the target)
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of CHOICE class name (referenced CHOICE types work correctly)
 - Nested SEQUENCE OF with SEQUENCE elements: list encoding uses inner content without per-element TLV wrapper (pre-existing issue, not specific to new features)
+- Constraints on SEQUENCE OF / SET OF types not supported (LL(k) grammar ambiguity with recursive `Type`)
+- Contained subtype constraints deferred (e.g., `(MySubType)`)
+- Permitted alphabet range handling deferred (e.g., `FROM ("A".."Z")`)
 
 ### R27b: Move Encoding Logic from Templates to Builder ✅ COMPLETE
 
@@ -259,11 +265,17 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Adding a new language requires implementing renderer methods, not duplicating template logic
 - All 144 tests pass identically
 
-**Milestone 10: Constraint Parsing** — Grammar, parser callbacks, AST→IR bridge, codegen for validation
-- Grammar rules for value ranges, size constraints, permitted alphabets, component constraints, extensions
-- Parser callbacks to build constraint AST nodes
-- IR bridge to convert constraint AST → IR (IR structures already defined)
-- Codegen to emit range validation, size checks, etc. in generated code
+**Milestone 10: Constraint Parsing ✅ COMPLETE**
+- Grammar rules for value ranges, size constraints, permitted alphabets added to `asn1.par`
+- Parser callbacks build constraint AST nodes with correct min/max ordering
+- IR bridge converts constraint AST → IR with `constraint_to_ir()` fully implemented
+- Codegen emits Python `validate()` method called from encode/decode methods
+- Integration test: `tests/integration/constrained_types.asn1` + `test_constrained_types.py` (9 tests)
+
+**Known Limitations:**
+- Constraints on SEQUENCE OF / SET OF types not supported (LL(k) grammar ambiguity with recursive Type)
+- Contained subtype constraints deferred (e.g., `(MySubType)`)
+- Permitted alphabet range handling deferred (e.g., `FROM ("A".."Z")`)
 
 **Remaining Backlog:**
 - [ ] PER, OER, XER, JER encoding backends
@@ -277,7 +289,7 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 Located at `asnvil-runtime-python/` — **NOT a pip package**. It ships as a directory copied alongside generated code. Generated Python imports via `from asnvil_runtime import ...`.
 
 Files:
-- `__init__.py` — Exports: `AsnType`, `Tag`, `TagClass`, `BerEncoder`, `BerDecoder`, `DerEncoder`, `DerDecoder`, `BitString`, `ObjectIdentifier`
+- `__init__.py` — Exports: `AsnType`, `Tag`, `TagClass`, `BerEncoder`, `BerDecoder`, `DerEncoder`, `DerDecoder`, `BitString`, `ObjectIdentifier`, `ConstraintViolationError`
 - `ber.py` — BER TLV encoder/decoder primitives
 - `der.py` — DER (canonical BER) encoder/decoder
 - `types.py` — `BitString`, `ObjectIdentifier`, `AsnAny`
@@ -348,7 +360,7 @@ class Person(AsnType):
 - [ ] **R19: OID string marker protocol is fragile** — `grammar.rs:132-191`. OIDs serialized as comma-joined strings with `__oid_name__:`/`__oid_num__:` prefixes. Should use a dedicated stack.
 - [ ] **R20: ASN.1 semantic decision in parser layer** — `grammar.rs:916`. Absent EXPORTS defaults to "ALL" in the parser; should be an IR-layer concern.
 - [ ] **R21: Parameterized types unsupported despite AST definition** — `asn1.par:113` vs `ast.rs:194`. Grammar has `ReferencedType: Reference;` with no parameters.
-- [ ] **R22: No constraint parsing** — Moved to **Milestone 10**. Grammar has no constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` cannot be parsed.
+- [x] **R22: No constraint parsing** — Moved to **Milestone 10**. **Fixed**: Grammar now supports constraint syntax. `INTEGER (0..255)`, `OCTET STRING (SIZE(1..100))` parse correctly. Value ranges, size constraints, and single-value constraints implemented.
 - [ ] **R23: 15 stacks with no helper abstraction** — every callback repeats push/pop/reverse patterns.
  - [x] **R42: `reference()` callback pollutes `str_stack`** — `grammar.rs:71-73`. Fixed as part of R41.
 
@@ -378,13 +390,17 @@ class Person(AsnType):
 - [x] **R40: `BerContext.list_element_ber` uses `Vec` instead of `Option`** — Already using `Option<Box<BerFieldInfo>>`.
 
 ### Remaining Milestones
-1. Milestone 10: Constraint Parsing (grammar, parser, IR bridge, codegen)
-2. PER, OER, XER, JER encoding backends
-3. Rust, TypeScript, C, Go backends
+1. PER, OER, XER, JER encoding backends
+2. Rust, TypeScript, C, Go backends
+
+### Known Limitations
+- Constraints on SEQUENCE OF / SET OF types not supported (LL(k) grammar ambiguity with recursive `Type`)
+- Contained subtype constraints deferred (e.g., `(MySubType)`)
+- Permitted alphabet range handling deferred (e.g., `FROM ("A".."Z")`)
+- Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of generated CHOICE class name (encoding/decoding works correctly — cosmetic only)
 
 ### Backlog (Menial / Polish)
 - SNMP integration test (RFC 3416-based simplified spec, similar to X.509/LDAP)
-- Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of generated CHOICE class name (encoding/decoding works correctly — cosmetic only)
 
 ### Current Test Counts
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)

@@ -75,9 +75,9 @@ Options:
 | asnvil-codegen | 12 Rust unit tests | ✅ |
 | asnvil (CLI) | 13 Rust unit tests | ✅ |
 | Python runtime | 55 unit tests | ✅ |
-| Integration | 5 suites, 41 roundtrip tests | ✅ |
+| Integration | 6 suites, 59 roundtrip tests | ✅ |
 
-**Total: 48 Rust tests + 96 Python tests (144 total)**
+**Total: 48 Rust tests + 114 Python tests (162 total)**
 
 ### Running Tests
 
@@ -104,6 +104,8 @@ Located at `asnvil-runtime-python/` — ships as a directory alongside generated
 - Generated per-type encode/decode for SEQUENCE, SET, CHOICE, ENUMERATED, SEQUENCE OF, SET OF
 - DEFAULT value handling
 - Negative integer encoding
+- Constraint validation (`validate()` method with range/size checks)
+- `ConstraintViolationError` for constraint violations
 
 ### Runtime API
 
@@ -113,7 +115,7 @@ from asnvil_runtime import (
     BerEncoder, BerDecoder,
     DerEncoder, DerDecoder,
     BitString, ObjectIdentifier,
-    AsnError,
+    AsnError, ConstraintViolationError,
 )
 
 # Low-level encoding
@@ -153,8 +155,8 @@ cargo run -- --help             # CLI help
 | 9: ANY DEFINED BY | ✅ Done | Raw TLV storage with full TLV reconstruction |
 | R27: Encoding Logic in Code AST | ✅ Done | EncodeStmt/DecodeStmt, EncodingType enum, language-agnostic TypeRef |
 | Review Backlog | ✅ Done | All serious (R6-R14) and design (R24-R34) items completed |
-| 10: Constraint Parsing | Planned | Grammar rules, parser callbacks, IR bridge, codegen for validation |
-| 11: SNMP Integration | Planned | RFC 3416-based integration test |
+| 10: Constraint Parsing | ✅ Done | Grammar rules, parser callbacks, IR bridge, codegen for validation |
+| 11: SNMP Integration | ✅ Done | RFC 3416-based integration test |
 | 12: PER/OER/XER/JER | Future | Additional encoding backends |
 | 13: More Languages | Future | Rust, TypeScript, C, Go backends |
 
