@@ -280,7 +280,6 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 **Remaining Backlog:**
 - [ ] PER, OER, XER, JER encoding backends
 - [ ] Rust, TypeScript, C, Go backends
-- [ ] CHOICE as field within SEQUENCE (works for referenced CHOICE types; inline CHOICE type annotation needs improvement)
 - [ ] Non-minimal long-form tag validation (decoder currently accepts non-minimal tags)
 - [ ] Recursive type support (parser stack overflows on self-referencing types)
 - [ ] Optional tagged field ordering fix (fields may decode out of order)
