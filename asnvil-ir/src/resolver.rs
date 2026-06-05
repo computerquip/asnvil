@@ -161,14 +161,15 @@ impl Resolver {
                     IrError::TypeNotFound(name.clone())
                 })?;
 
-                let resolved = self.resolve_type(&type_def.ty, target_module)?;
-
-                if Self::is_complex_type(&resolved) {
+                // Check is_complex_type BEFORE resolving to prevent infinite recursion
+                // for self-referencing types (e.g., RecursiveChoice ::= CHOICE { nested RecursiveChoice })
+                if Self::is_complex_type(&type_def.ty) {
                     Ok(AsnType::ReferencedType {
                         module: module.clone(),
                         name: name.clone(),
                     })
                 } else {
+                    let resolved = self.resolve_type(&type_def.ty, target_module)?;
                     Ok(resolved)
                 }
             }
@@ -251,13 +252,14 @@ impl Resolver {
     ) -> Result<(), IrError> {
         match ty {
             AsnType::ReferencedType { module, name } => {
+                // Self-references are valid ASN.1 (e.g., RecursiveSeq ::= SEQUENCE { children SEQUENCE OF RecursiveSeq })
+                if name == original_name {
+                    return Ok(());
+                }
                 if chain.contains(name) {
                     return Err(IrError::CircularReference(
                         chain.iter().chain(Some(name)).cloned().collect::<Vec<_>>().join(" -> "),
                     ));
-                }
-                if name == original_name {
-                    return Err(IrError::CircularReference(name.clone()));
                 }
                 let target_module = module.as_deref().unwrap_or(current_module);
                 if let Some(target) = self.modules.get(target_module) {

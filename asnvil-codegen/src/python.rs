@@ -216,7 +216,7 @@ impl LanguageRenderer for PythonRenderer {
 
     fn runtime_imports(&self) -> Vec<String> {
         vec![
-            "from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, AsnError, ConstraintViolationError".to_string(),
+            "from asnvil_runtime import AsnType, Tag, TagClass, BerEncoder, BerDecoder, DerEncoder, DerDecoder, AsnError, ConstraintViolationError, UnexpectedTagError".to_string(),
             "from dataclasses import dataclass, field".to_string(),
             "from typing import Optional".to_string(),
         ]
@@ -326,7 +326,100 @@ impl PythonRenderer {
                     element_encode = element_encode
                 )
             }
-            EncodeStmt::WrapExplicit { .. } | EncodeStmt::WrapImplicit { .. } => String::new(),
+            EncodeStmt::WrapExplicit { outer_tag, inner_stmt } => {
+                let inner_python = match inner_stmt.as_ref() {
+                    EncodeStmt::WriteAny { value, .. } => {
+                        format!("{indent}_ib = {value}", indent = indent)
+                    }
+                    EncodeStmt::WriteInteger { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value})\n{indent}_ib = _ie.finish()\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 2, False)\n{indent}_itl.write_length(len(_ib))\n{indent}_itl.write_bytes(_ib)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteEnumerated { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value}.value if hasattr({value}, 'value') else {value})\n{indent}_ib = _ie.finish()\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 10, False)\n{indent}_itl.write_length(len(_ib))\n{indent}_itl.write_bytes(_ib)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteBoolean { value, .. } => {
+                        format!("{indent}_ib = b'\\xff' if {value} else b'\\x00'\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 1, False)\n{indent}_itl.write_length(1)\n{indent}_itl.write_bytes(_ib)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteString { value, encoding, tag, .. } => {
+                        format!("{indent}_sb = {value}.encode('{encoding}')\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, {tag_num}, False)\n{indent}_itl.write_length(len(_sb))\n{indent}_itl.write_bytes(_sb)\n{indent}_ib = _itl.finish()", indent = indent, tag_num = tag.number)
+                    }
+                    EncodeStmt::WriteBytes { value, tag, .. } => {
+                        format!("{indent}_itl = {encoder}()\n{indent}_itl.write_tlv(TagClass.UNIVERSAL, {tag_num}, {value})\n{indent}_ib = _itl.finish()", indent = indent, tag_num = tag.number)
+                    }
+                    EncodeStmt::WriteBitString { value, .. } => {
+                        format!("{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 3, False)\n{indent}_itl.write_length(len({value}.data) + 1)\n{indent}_itl.write_bytes(bytes([{value}.unused_bits]))\n{indent}_itl.write_bytes({value}.data)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteOid { value, .. } => {
+                        format!("{indent}_ob = {value}.encode()\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 6, False)\n{indent}_itl.write_length(len(_ob))\n{indent}_itl.write_bytes(_ob)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteReferenced { value, encode_method, .. } | EncodeStmt::WriteChoice { value, encode_method, .. } => {
+                        format!("{indent}_ib = {value}.{encode_method}()", indent = indent)
+                    }
+                    _ => {
+                        format!("{indent}_ib = b''", indent = indent)
+                    }
+                };
+                format!(
+                    "{inner_python}\n\
+                     {indent}_oe = {encoder}()\n\
+                     {indent}_oe.write_tag(TagClass.{tag_class}, {tag_number}, True)\n\
+                     {indent}_oe.write_length(len(_ib))\n\
+                     {indent}_oe.write_bytes(_ib)\n\
+                     {indent}content.extend(_oe.finish())",
+                    indent = indent,
+                    tag_class = outer_tag.class, tag_number = outer_tag.number
+                )
+            }
+            EncodeStmt::WrapImplicit { outer_tag, inner_stmt, tag_number: _ } => {
+                let inner_python = match inner_stmt.as_ref() {
+                    EncodeStmt::WriteInteger { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value})\n{indent}_ib = _ie.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteEnumerated { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value}.value if hasattr({value}, 'value') else {value})\n{indent}_ib = _ie.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteBoolean { value, .. } => {
+                        format!("{indent}_ib = b'\\xff' if {value} else b'\\x00'", indent = indent)
+                    }
+                    EncodeStmt::WriteString { value, encoding, .. } => {
+                        format!("{indent}_ib = {value}.encode('{encoding}')", indent = indent)
+                    }
+                    EncodeStmt::WriteBytes { value, .. } => {
+                        format!("{indent}_ib = {value}", indent = indent)
+                    }
+                    EncodeStmt::WriteBitString { value, .. } => {
+                        format!("{indent}_ib = bytes([{value}.unused_bits]) + {value}.data", indent = indent)
+                    }
+                    EncodeStmt::WriteOid { value, .. } => {
+                        format!("{indent}_ib = {value}.encode()", indent = indent)
+                    }
+                    EncodeStmt::WriteNull { .. } => {
+                        format!("{indent}_ib = b''", indent = indent)
+                    }
+                    EncodeStmt::WriteReal { value, .. } => {
+                        format!("{indent}import struct\n{indent}_ib = struct.pack('>d', {value})", indent = indent)
+                    }
+                    EncodeStmt::WriteTime { value, .. } => {
+                        format!("{indent}_ib = {value}.strftime('%Y%m%d%H%M%SZ').encode('ascii')", indent = indent)
+                    }
+                    EncodeStmt::WriteReferenced { value, encode_method, .. } | EncodeStmt::WriteChoice { value, encode_method, .. } => {
+                        format!("{indent}_ib = {value}.{encode_method}()", indent = indent)
+                    }
+                    _ => {
+                        format!("{indent}_ib = b''", indent = indent)
+                    }
+                };
+                format!(
+                    "{inner_python}\n\
+                     {indent}_oe = {encoder}()\n\
+                     {indent}_oe.write_tag(TagClass.{tag_class}, {tag_number}, False)\n\
+                     {indent}_oe.write_length(len(_ib))\n\
+                     {indent}_oe.write_bytes(_ib)\n\
+                     {indent}content.extend(_oe.finish())",
+                    indent = indent,
+                    tag_class = outer_tag.class, tag_number = outer_tag.number
+                )
+            }
         }
     }
 
@@ -510,7 +603,100 @@ impl PythonRenderer {
                     element_encode = element_encode
                 )
             }
-            EncodeStmt::WrapExplicit { .. } | EncodeStmt::WrapImplicit { .. } => String::new(),
+            EncodeStmt::WrapExplicit { outer_tag, inner_stmt } => {
+                let inner_python = match inner_stmt.as_ref() {
+                    EncodeStmt::WriteAny { value, .. } => {
+                        format!("{indent}_ib = {value}", indent = indent)
+                    }
+                    EncodeStmt::WriteInteger { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value})\n{indent}_ib = _ie.finish()\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 2, False)\n{indent}_itl.write_length(len(_ib))\n{indent}_itl.write_bytes(_ib)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteEnumerated { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value}.value if hasattr({value}, 'value') else {value})\n{indent}_ib = _ie.finish()\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 10, False)\n{indent}_itl.write_length(len(_ib))\n{indent}_itl.write_bytes(_ib)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteBoolean { value, .. } => {
+                        format!("{indent}_ib = b'\\xff' if {value} else b'\\x00'\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 1, False)\n{indent}_itl.write_length(1)\n{indent}_itl.write_bytes(_ib)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteString { value, encoding, tag, .. } => {
+                        format!("{indent}_sb = {value}.encode('{encoding}')\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, {tag_num}, False)\n{indent}_itl.write_length(len(_sb))\n{indent}_itl.write_bytes(_sb)\n{indent}_ib = _itl.finish()", indent = indent, tag_num = tag.number)
+                    }
+                    EncodeStmt::WriteBytes { value, tag, .. } => {
+                        format!("{indent}_itl = {encoder}()\n{indent}_itl.write_tlv(TagClass.UNIVERSAL, {tag_num}, {value})\n{indent}_ib = _itl.finish()", indent = indent, tag_num = tag.number)
+                    }
+                    EncodeStmt::WriteBitString { value, .. } => {
+                        format!("{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 3, False)\n{indent}_itl.write_length(len({value}.data) + 1)\n{indent}_itl.write_bytes(bytes([{value}.unused_bits]))\n{indent}_itl.write_bytes({value}.data)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteOid { value, .. } => {
+                        format!("{indent}_ob = {value}.encode()\n{indent}_itl = {encoder}()\n{indent}_itl.write_tag(TagClass.UNIVERSAL, 6, False)\n{indent}_itl.write_length(len(_ob))\n{indent}_itl.write_bytes(_ob)\n{indent}_ib = _itl.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteReferenced { value, encode_method, .. } | EncodeStmt::WriteChoice { value, encode_method, .. } => {
+                        format!("{indent}_ib = {value}.{encode_method}()", indent = indent)
+                    }
+                    _ => {
+                        format!("{indent}_ib = b''", indent = indent)
+                    }
+                };
+                format!(
+                    "{inner_python}\n\
+                     {indent}_oe = {encoder}()\n\
+                     {indent}_oe.write_tag(TagClass.{tag_class}, {tag_number}, True)\n\
+                     {indent}_oe.write_length(len(_ib))\n\
+                     {indent}_oe.write_bytes(_ib)\n\
+                     {indent}_tlvs.append(_oe.finish())",
+                    indent = indent,
+                    tag_class = outer_tag.class, tag_number = outer_tag.number
+                )
+            }
+            EncodeStmt::WrapImplicit { outer_tag, inner_stmt, tag_number: _ } => {
+                let inner_python = match inner_stmt.as_ref() {
+                    EncodeStmt::WriteInteger { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value})\n{indent}_ib = _ie.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteEnumerated { value, .. } => {
+                        format!("{indent}_ie = {encoder}()\n{indent}_ie.write_integer({value}.value if hasattr({value}, 'value') else {value})\n{indent}_ib = _ie.finish()", indent = indent)
+                    }
+                    EncodeStmt::WriteBoolean { value, .. } => {
+                        format!("{indent}_ib = b'\\xff' if {value} else b'\\x00'", indent = indent)
+                    }
+                    EncodeStmt::WriteString { value, encoding, .. } => {
+                        format!("{indent}_ib = {value}.encode('{encoding}')", indent = indent)
+                    }
+                    EncodeStmt::WriteBytes { value, .. } => {
+                        format!("{indent}_ib = {value}", indent = indent)
+                    }
+                    EncodeStmt::WriteBitString { value, .. } => {
+                        format!("{indent}_ib = bytes([{value}.unused_bits]) + {value}.data", indent = indent)
+                    }
+                    EncodeStmt::WriteOid { value, .. } => {
+                        format!("{indent}_ib = {value}.encode()", indent = indent)
+                    }
+                    EncodeStmt::WriteNull { .. } => {
+                        format!("{indent}_ib = b''", indent = indent)
+                    }
+                    EncodeStmt::WriteReal { value, .. } => {
+                        format!("{indent}import struct\n{indent}_ib = struct.pack('>d', {value})", indent = indent)
+                    }
+                    EncodeStmt::WriteTime { value, .. } => {
+                        format!("{indent}_ib = {value}.strftime('%Y%m%d%H%M%SZ').encode('ascii')", indent = indent)
+                    }
+                    EncodeStmt::WriteReferenced { value, encode_method, .. } | EncodeStmt::WriteChoice { value, encode_method, .. } => {
+                        format!("{indent}_ib = {value}.{encode_method}()", indent = indent)
+                    }
+                    _ => {
+                        format!("{indent}_ib = b''", indent = indent)
+                    }
+                };
+                format!(
+                    "{inner_python}\n\
+                     {indent}_oe = {encoder}()\n\
+                     {indent}_oe.write_tag(TagClass.{tag_class}, {tag_number}, False)\n\
+                     {indent}_oe.write_length(len(_ib))\n\
+                     {indent}_oe.write_bytes(_ib)\n\
+                     {indent}_tlvs.append(_oe.finish())",
+                    indent = indent,
+                    tag_class = outer_tag.class, tag_number = outer_tag.number
+                )
+            }
         }
     }
 
@@ -1008,8 +1194,14 @@ impl PythonRenderer {
                         } else {
                             format!(
                                 "{indent}if {value} is not None:\n\
-                                 {inner_indent}return {value}.encode_der()",
-                                indent = indent, inner_indent = inner_indent, value = value
+                                 {inner_indent}_inner = {value}.encode_der()\n\
+                                 {inner_indent}_e = {encoder}()\n\
+                                 {inner_indent}_e.write_tag(TagClass.{outer_tag_class}, {outer_tag_number}, True)\n\
+                                 {inner_indent}_e.write_length(len(_inner))\n\
+                                 {inner_indent}_e.write_bytes(_inner)\n\
+                                 {inner_indent}return _e.finish()",
+                                indent = indent, inner_indent = inner_indent, encoder = encoder, value = value,
+                                outer_tag_class = outer_tag_class, outer_tag_number = outer_tag_number
                             )
                         }
                     }
@@ -1232,51 +1424,59 @@ impl PythonRenderer {
             out.push_str("        # Reconstruct the sorted content and decode normally\n");
             out.push_str("        _sorted_content = DerDecoder.sort_set_tlv(_set_elements)\n");
             out.push_str("        decoder2 = DerDecoder(_sorted_content)\n");
-            for f in &sorted_fields {
-                if f.ber.is_none() { continue; }
-                let ber = f.ber.as_ref().unwrap();
-                if f.optional {
+            let optional_fields: Vec<_> = sorted_fields.iter().filter(|f| f.optional && f.ber.is_some()).collect();
+            let required_fields: Vec<_> = sorted_fields.iter().filter(|f| !f.optional && f.ber.is_some()).collect();
+            for f in &required_fields {
+                out.push_str(&format!("        _ft = decoder2.read_tag()\n"));
+                out.push_str(&format!("        _fl = decoder2.read_length()\n"));
+                out.push_str(&format!("        _fd = decoder2.read_bytes(_fl)\n"));
+                for stmt in &f.decode_stmts {
+                    let code = self.render_decode_field(stmt, "DerDecoder", "        ");
+                    out.push_str(&code);
+                    out.push('\n');
+                }
+            }
+            if !optional_fields.is_empty() {
+                for f in &optional_fields {
                     if let Some(ref default) = f.default {
                         let default_python = Self::value_literal_to_python(default);
                         out.push_str(&format!("        _{} = {}\n", f.name, default_python));
                     } else {
                         out.push_str(&format!("        _{} = None\n", f.name));
                     }
-                    out.push_str("        if decoder2._pos < len(_sorted_content):\n");
-                    out.push_str(&format!("            _{}_save = decoder2._pos\n", f.name));
-                    out.push_str("            _ft = decoder2.read_tag()\n");
+                }
+                out.push_str("        while decoder2._pos < len(_sorted_content):\n");
+                out.push_str("            _ft = decoder2.read_tag()\n");
+                out.push_str("            _fl = decoder2.read_length()\n");
+                out.push_str("            _fd = decoder2.read_bytes(_fl)\n");
+                for (i, f) in optional_fields.iter().enumerate() {
+                    let ber = f.ber.as_ref().unwrap();
+                    let branch = if i == 0 { "if" } else { "elif" };
                     if !ber.choice_alternative_tags.is_empty() {
                         let tag_checks: Vec<String> = ber.choice_alternative_tags.iter().map(|t| {
                             let constructed_check = if t.constructed { " and _ft[2]" } else { " and not _ft[2]" };
                             format!("(_ft[0] == TagClass.{} and _ft[1] == {}{})", t.tag_class, t.tag_number, constructed_check)
                         }).collect();
-                        out.push_str(&format!("            if ({}):\n", tag_checks.join(" or ")));
+                        out.push_str(&format!("            {} ({}):\n", branch, tag_checks.join(" or ")));
                     } else {
-                        out.push_str(&format!("            if _ft[0] == TagClass.UNIVERSAL and _ft[1] == {} and not _ft[2]:\n", ber.tag_number));
+                        let constructed_check = if ber.constructed { " and _ft[2]" } else { " and not _ft[2]" };
+                        out.push_str(&format!("            {} (_ft[0] == TagClass.{} and _ft[1] == {}{}):\n", branch, ber.tag_class, ber.tag_number, constructed_check));
                     }
-                    out.push_str("                _fl = decoder2.read_length()\n");
-                    out.push_str("                _fd = decoder2.read_bytes(_fl)\n");
                     for stmt in &f.decode_stmts {
-                        let code = self.render_decode_field(stmt, "DerDecoder", "                ");
-                        out.push_str(&code);
-                        out.push('\n');
-                    }
-                    out.push_str("            else:\n");
-                    out.push_str(&format!("                decoder2._pos = _{}_save\n", f.name));
-                    if f.default.is_some() {
-                        let default_python = Self::value_literal_to_python(f.default.as_ref().unwrap());
-                        out.push_str(&format!("                _{} = {}\n", f.name, default_python));
-                    }
-                } else {
-                    out.push_str(&format!("        _ft = decoder2.read_tag()\n"));
-                    out.push_str(&format!("        _fl = decoder2.read_length()\n"));
-                    out.push_str(&format!("        _fd = decoder2.read_bytes(_fl)\n"));
-                    for stmt in &f.decode_stmts {
-                        let code = self.render_decode_field(stmt, "DerDecoder", "        ");
+                        let code = if ber.tagging_mode == "explicit" {
+                            let ld = format!("_{}_ld", f.name);
+                            let explicit_code = format!("                {ld} = DerDecoder(_fd)");
+                            let decoded = self.render_decode_field_explicit(stmt, &ld, "                ");
+                            format!("{}\n{}", explicit_code, decoded)
+                        } else {
+                            self.render_decode_field(stmt, "DerDecoder", "                ")
+                        };
                         out.push_str(&code);
                         out.push('\n');
                     }
                 }
+                out.push_str("            else:\n");
+                out.push_str("                raise UnexpectedTagError(f\"Unexpected tag: {_ft}\")\n");
             }
             out.push_str("        instance = cls(\n");
             for (i, f) in sorted_fields.iter().enumerate() {
@@ -1295,51 +1495,67 @@ impl PythonRenderer {
             out.push_str("        _tag = decoder.read_tag()\n");
             out.push_str("        _length = decoder.read_length()\n");
             out.push_str("        _end = decoder._pos + _length\n");
-            for f in &sorted_fields {
-                if f.ber.is_none() { continue; }
+            let optional_fields: Vec<_> = sorted_fields.iter().filter(|f| f.optional && f.ber.is_some()).collect();
+            let required_fields: Vec<_> = sorted_fields.iter().filter(|f| !f.optional && f.ber.is_some()).collect();
+            for f in &required_fields {
                 let ber = f.ber.as_ref().unwrap();
-                if f.optional {
+                out.push_str(&format!("        _ft = decoder.read_tag()\n"));
+                out.push_str(&format!("        _fl = decoder.read_length()\n"));
+                out.push_str(&format!("        _fd = decoder.read_bytes(_fl)\n"));
+                for stmt in &f.decode_stmts {
+                    let code = if ber.tagging_mode == "explicit" {
+                        let ld = format!("_{}_ld", f.name);
+                        let explicit_code = format!("        {ld} = DerDecoder(_fd)");
+                        let decoded = self.render_decode_field_explicit(stmt, &ld, "        ");
+                        format!("{}\n{}", explicit_code, decoded)
+                    } else {
+                        self.render_decode_field(stmt, "DerDecoder", "        ")
+                    };
+                    out.push_str(&code);
+                    out.push('\n');
+                }
+            }
+            if !optional_fields.is_empty() {
+                for f in &optional_fields {
                     if let Some(ref default) = f.default {
                         let default_python = Self::value_literal_to_python(default);
                         out.push_str(&format!("        _{} = {}\n", f.name, default_python));
                     } else {
                         out.push_str(&format!("        _{} = None\n", f.name));
                     }
-                    out.push_str("        if decoder._pos < _end:\n");
-                    out.push_str(&format!("            _{}_save = decoder._pos\n", f.name));
-                    out.push_str("            _ft = decoder.read_tag()\n");
+                }
+                out.push_str("        while decoder._pos < _end:\n");
+                out.push_str("            _ft = decoder.read_tag()\n");
+                out.push_str("            _fl = decoder.read_length()\n");
+                out.push_str("            _fd = decoder.read_bytes(_fl)\n");
+                for (i, f) in optional_fields.iter().enumerate() {
+                    let ber = f.ber.as_ref().unwrap();
+                    let branch = if i == 0 { "if" } else { "elif" };
                     if !ber.choice_alternative_tags.is_empty() {
                         let tag_checks: Vec<String> = ber.choice_alternative_tags.iter().map(|t| {
                             let constructed_check = if t.constructed { " and _ft[2]" } else { " and not _ft[2]" };
                             format!("(_ft[0] == TagClass.{} and _ft[1] == {}{})", t.tag_class, t.tag_number, constructed_check)
                         }).collect();
-                        out.push_str(&format!("            if ({}):\n", tag_checks.join(" or ")));
+                        out.push_str(&format!("            {} ({}):\n", branch, tag_checks.join(" or ")));
                     } else {
-                        out.push_str(&format!("            if _ft[0] == TagClass.UNIVERSAL and _ft[1] == {} and not _ft[2]:\n", ber.tag_number));
+                        let constructed_check = if ber.constructed { " and _ft[2]" } else { " and not _ft[2]" };
+                        out.push_str(&format!("            {} (_ft[0] == TagClass.{} and _ft[1] == {}{}):\n", branch, ber.tag_class, ber.tag_number, constructed_check));
                     }
-                    out.push_str("                _fl = decoder.read_length()\n");
-                    out.push_str("                _fd = decoder.read_bytes(_fl)\n");
                     for stmt in &f.decode_stmts {
-                        let code = self.render_decode_field(stmt, "DerDecoder", "                ");
-                        out.push_str(&code);
-                        out.push('\n');
-                    }
-                    out.push_str("            else:\n");
-                    out.push_str(&format!("                decoder._pos = _{}_save\n", f.name));
-                    if f.default.is_some() {
-                        let default_python = Self::value_literal_to_python(f.default.as_ref().unwrap());
-                        out.push_str(&format!("                _{} = {}\n", f.name, default_python));
-                    }
-                } else {
-                    out.push_str(&format!("        _ft = decoder.read_tag()\n"));
-                    out.push_str(&format!("        _fl = decoder.read_length()\n"));
-                    out.push_str(&format!("        _fd = decoder.read_bytes(_fl)\n"));
-                    for stmt in &f.decode_stmts {
-                        let code = self.render_decode_field(stmt, "DerDecoder", "        ");
+                        let code = if ber.tagging_mode == "explicit" {
+                            let ld = format!("_{}_ld", f.name);
+                            let explicit_code = format!("                {ld} = DerDecoder(_fd)");
+                            let decoded = self.render_decode_field_explicit(stmt, &ld, "                ");
+                            format!("{}\n{}", explicit_code, decoded)
+                        } else {
+                            self.render_decode_field(stmt, "DerDecoder", "                ")
+                        };
                         out.push_str(&code);
                         out.push('\n');
                     }
                 }
+                out.push_str("            else:\n");
+                out.push_str("                raise UnexpectedTagError(f\"Unexpected tag: {_ft}\")\n");
             }
             out.push_str("        instance = cls(\n");
             for (i, f) in sorted_fields.iter().enumerate() {
@@ -1364,47 +1580,61 @@ impl PythonRenderer {
         out.push_str("            raise InvalidLengthError(\"Expected indefinite length\")\n");
         out.push_str("        _content = decoder.read_constructed_indefinite()\n");
         out.push_str("        decoder2 = BerDecoder(_content)\n");
-        for f in &sorted_fields {
-            if f.ber.is_none() { continue; }
-            let ber = f.ber.as_ref().unwrap();
-            if f.optional {
+        let optional_fields: Vec<_> = sorted_fields.iter().filter(|f| f.optional && f.ber.is_some()).collect();
+        let required_fields: Vec<_> = sorted_fields.iter().filter(|f| !f.optional && f.ber.is_some()).collect();
+            for f in &required_fields {
+                let ber = f.ber.as_ref().unwrap();
+                out.push_str(&format!("        _ft = decoder2.read_tag()\n"));
+                out.push_str(&format!("        _fl = decoder2.read_length()\n"));
+                out.push_str(&format!("        _fd = decoder2.read_bytes(_fl)\n"));
+                for stmt in &f.decode_stmts {
+                    let code = if ber.tagging_mode == "explicit" {
+                        let ld = format!("_{}_ld", f.name);
+                        let explicit_code = format!("        {ld} = BerDecoder(_fd)");
+                        let decoded = self.render_decode_field_explicit(stmt, &ld, "        ");
+                        format!("{}\n{}", explicit_code, decoded)
+                    } else {
+                        self.render_decode_field_indefinite(stmt, "BerDecoder", "        ")
+                    };
+                    out.push_str(&code);
+                    out.push('\n');
+                }
+            }
+            if !optional_fields.is_empty() {
+            for f in &optional_fields {
                 if let Some(ref default) = f.default {
                     let default_python = Self::value_literal_to_python(default);
                     out.push_str(&format!("        _{} = {}\n", f.name, default_python));
                 } else {
                     out.push_str(&format!("        _{} = None\n", f.name));
                 }
-                out.push_str("        if not decoder2.at_end():\n");
-                out.push_str(&format!("            _{}_save = decoder2._pos\n", f.name));
-                out.push_str("            _ft = decoder2.read_tag()\n");
+            }
+            out.push_str("        while not decoder2.at_end():\n");
+            out.push_str("            _ft = decoder2.read_tag()\n");
+            out.push_str("            _fl = decoder2.read_length()\n");
+            out.push_str("            _fd = decoder2.read_bytes(_fl)\n");
+            for (i, f) in optional_fields.iter().enumerate() {
+                let ber = f.ber.as_ref().unwrap();
+                let branch = if i == 0 { "if" } else { "elif" };
                 if !ber.choice_alternative_tags.is_empty() {
                     let tag_checks: Vec<String> = ber.choice_alternative_tags.iter().map(|t| {
                         let constructed_check = if t.constructed { " and _ft[2]" } else { " and not _ft[2]" };
                         format!("(_ft[0] == TagClass.{} and _ft[1] == {}{})", t.tag_class, t.tag_number, constructed_check)
                     }).collect();
-                    out.push_str(&format!("            if ({}):\n", tag_checks.join(" or ")));
+                    out.push_str(&format!("            {} ({}):\n", branch, tag_checks.join(" or ")));
                 } else {
-                    out.push_str(&format!("            if _ft[0] == TagClass.UNIVERSAL and _ft[1] == {} and not _ft[2]:\n", ber.tag_number));
+                    let constructed_check = if ber.constructed { " and _ft[2]" } else { " and not _ft[2]" };
+                    out.push_str(&format!("            {} (_ft[0] == TagClass.{} and _ft[1] == {}{}):\n", branch, ber.tag_class, ber.tag_number, constructed_check));
                 }
-                out.push_str("                _fl = decoder2.read_length()\n");
-                out.push_str("                _fd = decoder2.read_bytes(_fl)\n");
                 for stmt in &f.decode_stmts {
-                    let code = self.render_decode_field_indefinite(stmt, "BerDecoder", "                ");
-                    out.push_str(&code);
-                    out.push('\n');
-                }
-                out.push_str("            else:\n");
-                out.push_str(&format!("                decoder2._pos = _{}_save\n", f.name));
-                if f.default.is_some() {
-                    let default_python = Self::value_literal_to_python(f.default.as_ref().unwrap());
-                    out.push_str(&format!("                _{} = {}\n", f.name, default_python));
-                }
-            } else {
-                out.push_str(&format!("        _ft = decoder2.read_tag()\n"));
-                out.push_str(&format!("        _fl = decoder2.read_length()\n"));
-                out.push_str(&format!("        _fd = decoder2.read_bytes(_fl)\n"));
-                for stmt in &f.decode_stmts {
-                    let code = self.render_decode_field_indefinite(stmt, "BerDecoder", "        ");
+                    let code = if ber.tagging_mode == "explicit" {
+                        let ld = format!("_{}_ld", f.name);
+                        let explicit_code = format!("                {ld} = BerDecoder(_fd)");
+                        let decoded = self.render_decode_field_explicit(stmt, &ld, "                ");
+                        format!("{}\n{}", explicit_code, decoded)
+                    } else {
+                        self.render_decode_field_indefinite(stmt, "BerDecoder", "                ")
+                    };
                     out.push_str(&code);
                     out.push('\n');
                 }
@@ -1693,11 +1923,7 @@ impl PythonRenderer {
                 out.push_str(&format!("            return cls({}={}.{}(_re.finish()))\n", alt.name, inner_type, decode_method));
             }
             _ => {
-                out.push_str("            _re = BerEncoder()\n");
-                out.push_str("            _re.write_tag(_tag[0], _tag[1], _tag[2])\n");
-                out.push_str("            _re.write_length(_fl)\n");
-                out.push_str("            _re.write_bytes(_fd)\n");
-                out.push_str(&format!("            return cls({}={}.{}(_re.finish()))\n", alt.name, inner_type, decode_method));
+                out.push_str(&format!("            return cls({}={}.{}(_fd))\n", alt.name, inner_type, decode_method));
             }
         }
         out
@@ -1732,11 +1958,7 @@ impl PythonRenderer {
                 out.push_str(&format!("            return cls({}={}.decode_ber(_re.finish()))\n", alt.name, inner_type));
             }
             _ => {
-                out.push_str("            _re = BerEncoder()\n");
-                out.push_str("            _re.write_tag(_tag[0], _tag[1], _tag[2])\n");
-                out.push_str("            _re.write_length(len(_content))\n");
-                out.push_str("            _re.write_bytes(_content)\n");
-                out.push_str(&format!("            return cls({}={}.decode_ber(_re.finish()))\n", alt.name, inner_type));
+                out.push_str(&format!("            return cls({}={}.decode_ber(_content))\n", alt.name, inner_type));
             }
         }
         out
@@ -2019,6 +2241,47 @@ impl PythonRenderer {
                     indent = indent, name = name, decoder_type = decoder_type,
                     element_decode = element_decode
                 )
+            }
+        }
+    }
+
+    fn render_decode_field_explicit(&self, stmt: &DecodeStmt, ld_var: &str, indent: &str) -> String {
+        match stmt {
+            DecodeStmt::ReadInteger { name } | DecodeStmt::ReadEnumerated { name } => {
+                format!("{indent}{ld}.read_tag()\n{indent}_{name} = {ld}.read_integer()", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadBoolean { name } => {
+                format!("{indent}{ld}.read_tag()\n{indent}_{name} = {ld}.read_boolean()", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadString { name, encoding } => {
+                format!("{indent}{ld}.read_tag()\n{indent}_{name}_len = {ld}.read_length()\n{indent}_{name} = {ld}.read_bytes(_{name}_len).decode('{encoding}')", indent = indent, ld = ld_var, name = name, encoding = encoding)
+            }
+            DecodeStmt::ReadBytes { name } => {
+                format!("{indent}{ld}.read_tag()\n{indent}_{name}_len = {ld}.read_length()\n{indent}_{name} = {ld}.read_bytes(_{name}_len)", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadBitString { name } => {
+                format!("{indent}{ld}.read_tag()\n{indent}_{ld}_bs = {ld}.read_bytes({ld}.read_length())\n{indent}_{name} = BitString(_{ld}_bs[1:], _{ld}_bs[0])", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadOid { name } => {
+                format!("{indent}{ld}.read_tag()\n{indent}_{name}_len = {ld}.read_length()\n{indent}_{name}, _ = ObjectIdentifier.decode({ld}.read_bytes(_{name}_len))", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadNull { name } => {
+                format!("{indent}{ld}.read_tag()\n{indent}{ld}.read_length()\n{indent}_{name} = None", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadReal { name } => {
+                format!("{indent}import struct\n{indent}{ld}.read_tag()\n{indent}_{name}_len = {ld}.read_length()\n{indent}_{name} = struct.unpack('>d', {ld}.read_bytes(_{name}_len))[0]", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadTime { name } => {
+                format!("{indent}from datetime import datetime\n{indent}{ld}.read_tag()\n{indent}_{name}_len = {ld}.read_length()\n{indent}_{name} = datetime.strptime({ld}.read_bytes(_{name}_len).decode('ascii'), '%Y%m%d%H%M%SZ')", indent = indent, ld = ld_var, name = name)
+            }
+            DecodeStmt::ReadAny { name, .. } => {
+                format!("{indent}_{name} = _fd", indent = indent, name = name)
+            }
+            DecodeStmt::ReadReferenced { name, inner_type, decode_method, .. } | DecodeStmt::ReadChoice { name, inner_type, decode_method, .. } => {
+                format!("{indent}_{name} = {inner_type}.{decode_method}(_fd)", indent = indent, name = name, inner_type = inner_type, decode_method = decode_method)
+            }
+            DecodeStmt::ReadList { name, .. } => {
+                format!("{indent}_{name}_ld = {ld}(_fd)\n{indent}_{name} = []\n{indent}while not _{name}_ld.at_end():\n{indent}    _{name}_ld.read_tag()\n{indent}    _{name}_len = _{name}_ld.read_length()\n{indent}    _{name}.append(_{name}_ld.read_bytes(_{name}_len))", indent = indent, ld = ld_var, name = name)
             }
         }
     }

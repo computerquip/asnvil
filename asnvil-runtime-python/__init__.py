@@ -1,7 +1,7 @@
 """ASN.1 Compiler Python Runtime - Pure stdlib implementation."""
 from __future__ import annotations
 
-from .errors import AsnError, UnexpectedTagError, InvalidLengthError, TruncatedInputError, ConstraintViolationError
+from .errors import AsnError, UnexpectedTagError, InvalidLengthError, TruncatedInputError, ConstraintViolationError, InvalidTagError
 from .ber import BerEncoder, BerDecoder
 from .der import DerEncoder, DerDecoder
 from .types import BitString, ObjectIdentifier
@@ -69,8 +69,10 @@ class Tag:
         constructed = bool(tag_byte & 0x20)
         number = tag_byte & 0x1F
         pos = 1
+        long_form = False
 
         if number == 0x1F:
+            long_form = True
             number = 0
             while True:
                 if pos >= len(data):
@@ -80,6 +82,9 @@ class Tag:
                 number = (number << 7) | (byte & 0x7F)
                 if not (byte & 0x80):
                     break
+
+        if long_form and number < 31:
+            raise InvalidTagError("Non-minimal tag: short form would suffice")
 
         return cls(tag_class=tag_class, number=number, constructed=constructed), pos
 

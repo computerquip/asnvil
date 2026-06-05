@@ -289,7 +289,8 @@ impl CodeAstBuilder {
             AsnType::Choice { alternatives, ext, .. } => {
                 for a in alternatives.iter().chain(ext.iter().flat_map(|e| e.iter())) {
                     let resolved = self.resolve_type(&a.ty);
-                    if is_inline_type(resolved) {
+                    let is_top_level_ref = matches!(&a.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+                    if is_inline_type(resolved) && !is_top_level_ref {
                         let child_name = Self::inline_type_name(name, &a.name);
                         decls.extend(self.build_inline_decl(resolved, &child_name));
                     }
@@ -347,7 +348,8 @@ impl CodeAstBuilder {
                 all_fields.extend(ext.iter().flat_map(|e| e.iter()));
                 for f in &all_fields {
                     let resolved = self.resolve_type(&f.ty);
-                    if is_inline_type(resolved) {
+                    let is_top_level_ref = matches!(&f.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+                    if is_inline_type(resolved) && !is_top_level_ref {
                         let child_name = Self::inline_type_name(name, &f.name);
                         decls.extend(self.build_inline_decl(resolved, &child_name));
                     }
@@ -373,7 +375,8 @@ impl CodeAstBuilder {
                 all_fields.extend(ext.iter().flat_map(|e| e.iter()));
                 for f in &all_fields {
                     let resolved = self.resolve_type(&f.ty);
-                    if is_inline_type(resolved) {
+                    let is_top_level_ref = matches!(&f.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+                    if is_inline_type(resolved) && !is_top_level_ref {
                         let child_name = Self::inline_type_name(name, &f.name);
                         decls.extend(self.build_inline_decl(resolved, &child_name));
                     }
@@ -406,7 +409,8 @@ impl CodeAstBuilder {
 
     fn build_seq_field(&self, f: &SequenceField, parent_name: &str, order: usize) -> Field {
         let resolved = self.resolve_type(&f.ty);
-        let ty = if is_inline_type(resolved) {
+        let is_top_level_ref = matches!(&f.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+        let ty = if is_inline_type(resolved) && !is_top_level_ref {
             let gen_name = Self::inline_type_name(parent_name, &f.name);
             if f.optional || f.default.is_some() {
                 TypeRef::Optional(Box::new(TypeRef::Named(gen_name)))
@@ -438,9 +442,15 @@ impl CodeAstBuilder {
 
     fn ber_info_for_field(&self, ty: &AsnType, parent_name: &str, field_name: &str) -> BerFieldInfo {
         let resolved = self.resolve_type(ty);
+        let is_top_level_ref = matches!(ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
         let constraints = build_constraints(&resolved, field_name);
+        let ref_name = if is_top_level_ref {
+            if let AsnType::ReferencedType { name, .. } = ty { Some(name.clone()) } else { None }
+        } else {
+            None
+        };
 if is_inline_type(resolved) {
-            let gen_name = Self::inline_type_name(parent_name, field_name);
+            let gen_name = ref_name.unwrap_or_else(|| Self::inline_type_name(parent_name, field_name));
             match resolved {
                 AsnType::Choice { .. } => {
                     let alt_tags = make_tags_for_type(resolved);
@@ -504,7 +514,8 @@ if is_inline_type(resolved) {
                 let all_fields: Vec<&SequenceField> = fields.iter().chain(ext.iter().flat_map(|e| e.iter())).collect();
                 for f in &all_fields {
                     let resolved = self.resolve_type(&f.ty);
-                    if is_inline_type(resolved) {
+                    let is_top_level_ref = matches!(&f.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+                    if is_inline_type(resolved) && !is_top_level_ref {
                         let gen_name = Self::inline_type_name(&assignment.name, &f.name);
                         decls.extend(self.build_inline_decl(resolved, &gen_name));
                     }
@@ -537,7 +548,8 @@ if is_inline_type(resolved) {
                 let all_fields: Vec<&SequenceField> = fields.iter().chain(ext.iter().flat_map(|e| e.iter())).collect();
                 for f in &all_fields {
                     let resolved = self.resolve_type(&f.ty);
-                    if is_inline_type(resolved) {
+                    let is_top_level_ref = matches!(&f.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+                    if is_inline_type(resolved) && !is_top_level_ref {
                         let gen_name = Self::inline_type_name(&assignment.name, &f.name);
                         decls.extend(self.build_inline_decl(resolved, &gen_name));
                     }
@@ -570,7 +582,8 @@ if is_inline_type(resolved) {
                 let all_alts: Vec<&IrChoiceAlt> = alternatives.iter().chain(ext.iter().flat_map(|e| e.iter())).collect();
                 for a in &all_alts {
                     let resolved = self.resolve_type(&a.ty);
-                    if is_inline_type(resolved) {
+                    let is_top_level_ref = matches!(&a.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+                    if is_inline_type(resolved) && !is_top_level_ref {
                         let gen_name = Self::inline_type_name(&assignment.name, &a.name);
                         decls.extend(self.build_inline_decl(resolved, &gen_name));
                     }
@@ -767,7 +780,8 @@ if is_inline_type(resolved) {
 
     fn build_sequence_field_with_parent(&self, f: &SequenceField, parent_name: &str) -> Field {
         let resolved = self.resolve_type(&f.ty);
-        let ty = if is_inline_type(resolved) {
+        let is_top_level_ref = matches!(&f.ty, AsnType::ReferencedType { name: ref_name, .. } if self.types.contains_key(ref_name));
+        let ty = if is_inline_type(resolved) && !is_top_level_ref {
             let gen_name = Self::inline_type_name(parent_name, &f.name);
             if f.optional || f.default.is_some() {
                 TypeRef::Optional(Box::new(TypeRef::Named(gen_name)))
@@ -1207,21 +1221,21 @@ if is_inline_type(resolved) {
 
     fn build_encode_stmts(name: &str, ber: &BerFieldInfo) -> Vec<EncodeStmt> {
         let value = format!("self.{}", name);
-        let stmt = match ber.encoding {
+        let inner_stmt = match ber.encoding {
             EncodingType::Integer => EncodeStmt::WriteInteger {
                 name: name.to_string(),
                 tag: Self::make_tag("UNIVERSAL", 2, false),
-                value,
+                value: value,
             },
             EncodingType::Enumerated => EncodeStmt::WriteEnumerated {
                 name: name.to_string(),
                 tag: Self::make_tag("UNIVERSAL", 10, false),
-                value,
+                value: value,
             },
             EncodingType::Boolean => EncodeStmt::WriteBoolean {
                 name: name.to_string(),
                 tag: Self::make_tag("UNIVERSAL", 1, false),
-                value,
+                value: value,
             },
             EncodingType::String => EncodeStmt::WriteString {
                 name: name.to_string(),
@@ -1292,7 +1306,20 @@ if is_inline_type(resolved) {
                 }
             }
         };
-        vec![stmt]
+        if ber.tagging_mode == "explicit" {
+            vec![EncodeStmt::WrapExplicit {
+                outer_tag: Self::make_tag(&ber.tag_class, ber.tag_number, true),
+                inner_stmt: Box::new(inner_stmt),
+            }]
+        } else if ber.tagging_mode == "implicit" {
+            vec![EncodeStmt::WrapImplicit {
+                outer_tag: Self::make_tag(&ber.tag_class, ber.tag_number, false),
+                inner_stmt: Box::new(inner_stmt),
+                tag_number: ber.inherent_tag_number,
+            }]
+        } else {
+            vec![inner_stmt]
+        }
     }
 
     fn build_decode_stmts(name: &str, ber: &BerFieldInfo) -> Vec<DecodeStmt> {
@@ -1368,8 +1395,8 @@ if is_inline_type(resolved) {
         };
 
         match ber.tagging_mode.as_str() {
-            "explicit" => vec![EncodeStmt::WrapExplicit { outer_tag, inner_name: name.to_string() }],
-            "implicit" => vec![EncodeStmt::WrapImplicit { outer_tag, inner_name: name.to_string(), tag_number: inner_tag.number }],
+            "explicit" => vec![EncodeStmt::WrapExplicit { outer_tag, inner_stmt: Box::new(inner_stmt) }],
+            "implicit" => vec![EncodeStmt::WrapImplicit { outer_tag, inner_stmt: Box::new(inner_stmt), tag_number: inner_tag.number }],
             _ => vec![inner_stmt],
         }
     }

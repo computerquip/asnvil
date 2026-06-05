@@ -49,3 +49,8 @@ class IndefiniteLengthNotAllowedError(AsnError):
 class SetNotCanonicalError(AsnError):
     """SET not in canonical order (DER-specific)."""
     pass
+
+
+class InvalidTagError(AsnError):
+    """Invalid tag encoding."""
+    pass

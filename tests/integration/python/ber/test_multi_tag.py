@@ -61,9 +61,8 @@ class TestMultiTag:
         encoded = t.encode_der()
         decoded = DeeplyTagged.decode_der(encoded)
         assert decoded.level1 == 1
-        # NOTE: optional tagged field ordering bug - level2 decoded as None, level3 gets level2's value
-        # This is a pre-existing decoder issue, not specific to this test
-        assert decoded.level3 == 2
+        assert decoded.level2 == 2
+        assert decoded.level3 == 3
 
     def test_deeply_tagged_with_string(self):
         """Test deeply tagged with string field."""
@@ -71,8 +70,9 @@ class TestMultiTag:
         encoded = t.encode_der()
         decoded = DeeplyTagged.decode_der(encoded)
         assert decoded.level1 == 10
-        # NOTE: optional tagged field ordering bug (same as above)
-        assert decoded.level3 == 20
+        assert decoded.level2 == 20
+        assert decoded.level3 == 30
+        assert decoded.label == "test"
 
     def test_tag_preserves_structure(self):
         """Verify that multi-tag encoding produces nested TLV structure."""

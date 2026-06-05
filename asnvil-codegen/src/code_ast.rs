@@ -108,8 +108,8 @@ pub enum EncodeStmt {
     WriteReferenced { name: String, tag: Tag, inner_type: String, encode_method: String, value: String },
     WriteChoice { name: String, tag: Tag, inner_type: String, encode_method: String, value: String },
     WriteList { name: String, tag: Tag, value: String, element_info: ListElementEncodeInfo },
-    WrapExplicit { outer_tag: Tag, inner_name: String },
-    WrapImplicit { outer_tag: Tag, inner_name: String, tag_number: u32 },
+    WrapExplicit { outer_tag: Tag, inner_stmt: Box<EncodeStmt> },
+    WrapImplicit { outer_tag: Tag, inner_stmt: Box<EncodeStmt>, tag_number: u32 },
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

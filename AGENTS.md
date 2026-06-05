@@ -278,11 +278,6 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - Permitted alphabet range handling deferred (e.g., `FROM ("A".."Z")`)
 
 **Remaining Backlog:**
-- [ ] PER, OER, XER, JER encoding backends
-- [ ] Rust, TypeScript, C, Go backends
-- [ ] Non-minimal long-form tag validation (decoder currently accepts non-minimal tags)
-- [ ] Recursive type support (parser stack overflows on self-referencing types)
-- [ ] Optional tagged field ordering fix (fields may decode out of order)
 - [ ] **Revisit BER test vector architecture** — `test_runtime_ber_vectors.py` has duplicated hex/file test pairs that are fragile (ber_file path in YAML must match directory structure exactly, DER vs BER error tests need special-case exclusions). Consider: unified test loader that auto-runs both hex and file from one vector, or eliminate file-based tests entirely since hex is authoritative and files are generated from the same data.
 
 **Load the `parol-parser` skill** before working on parser/grammar changes. **Load the `rust-best-practices` skill** before writing or reviewing Rust code. **Load the `askama` skill** before working on templates.
@@ -401,8 +396,13 @@ class Person(AsnType):
 - Contained subtype constraints deferred (e.g., `(MySubType)`)
 - Permitted alphabet range handling deferred (e.g., `FROM ("A".."Z")`)
 - Inline CHOICE as SEQUENCE field: type annotation becomes `Any` instead of generated CHOICE class name (encoding/decoding works correctly — cosmetic only)
-- Recursive self-referencing types cause parser stack overflow (e.g., `RecursiveSeq ::= SEQUENCE { children SEQUENCE OF RecursiveSeq }`)
-- Optional tagged field ordering bug: optional `[N] EXPLICIT` fields in SEQUENCE may decode out of order
+
+### Stabilization: Tag Validation, Recursive Types, Field Ordering ✅ COMPLETE
+
+- **Non-minimal long-form tag validation**: `Tag.decode()` and `BerDecoder.read_tag()` now reject non-minimal long-form tags. `DerDecoder.read_tag()` override adds DER-specific validation. New `InvalidTagError` added to runtime.
+- **Recursive type support**: Self-referencing types now compile and work correctly. Fixed resolver `resolve_type` to check `is_complex_type` BEFORE recursing. Fixed builder `build_inline_decl`/`build_type_assignment`/`build_seq_field`/`build_sequence_field_with_parent` to skip inline declarations for top-level type references. Fixed cycle detection to allow self-references (return `Ok(())`).
+- **Optional tagged field ordering fix**: Generated `decode_der()` uses dispatch loop with `if/elif` chain for optional tagged fields. Fixed WrapExplicit encode to generate full inner TLV. Fixed explicit tag decode with sub-decoder for all leaf types.
+- **Test updates**: Re-enabled recursive type tests (9 tests). Updated multi-tag tests to remove workarounds (8 tests). Added non-minimal tag test vectors and runtime tests (2 tests).
 
 ### Test Architecture
 
@@ -413,9 +413,9 @@ Test vectors are adapted from the [vlm/asn1c](https://github.com/vlm/asn1c) proj
 ### Current Test Counts
 - Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
 - Python runtime: 55 unit tests
-- Python BER vectors: 109 tests (19 tag + 9 length + 30 integer + 16 structured + 28 error + 7 DER error)
-- Integration: 9 suites, 87 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 10 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types + 10 any decode + 8 multi-tag + 10 embedded choice)
-- **Total: 299 tests**
+- Python BER vectors: 111 tests (20 tag + 9 length + 30 integer + 16 structured + 28 error + 7 DER error + 2 non-minimal tag tests)
+- Integration: 10 suites, 96 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 10 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types + 10 any decode + 9 recursive + 8 multi-tag + 10 embedded choice)
+- **Total: 310 tests**
 
 ### Milestone 10: Constraint Parsing ✅ COMPLETE
 

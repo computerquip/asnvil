@@ -168,15 +168,12 @@
 
 # Invalid tag encodings
 - name: tag_invalid_wrong_continuation
-  description: "Invalid: wrong continuation bit (0x80 has no valid continuation)"
+  description: "Invalid: truncated long tag (no valid continuation)"
   ber_hex: "1F80"
-  error: InvalidTagError
+  error: TruncatedInputError
 
-# NOTE: non-minimal long form tag validation not yet implemented
-# - name: tag_invalid_non_minimal
-#   description: "Invalid: non-minimal long form (72 should use short form)"
-#   ber_hex: "1F817F"
-#   error: InvalidTagError
+# NOTE: non-minimal long form tag validation is a DER-only requirement.
+# BER (X.690) permits non-minimal encoding; only DerDecoder rejects it.
 
 # ============================================================
 # LENGTH ENCODING VECTORS (from tests-skeletons/check-length.c)

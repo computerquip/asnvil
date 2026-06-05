@@ -28,8 +28,7 @@ TEST_SPECS: list[tuple[Path, Path]] = [
     (INTEGRATION_DIR / "snmp_protocol.asn1", INTEGRATION_DIR / "test_snmp_roundtrip.py"),
     # Python BER integration tests (Phase 3)
     (PYTHON_BER_DIR / "62-any-OK.asn1", PYTHON_BER_DIR / "test_any_decode.py"),
-    # NOTE: 43-recursion-OK.asn1 causes stack overflow (known limitation)
-    # (PYTHON_BER_DIR / "43-recursion-OK.asn1", PYTHON_BER_DIR / "test_recursive.py"),
+    (PYTHON_BER_DIR / "43-recursion-OK.asn1", PYTHON_BER_DIR / "test_recursive.py"),
     (PYTHON_BER_DIR / "65-multi-tag-OK.asn1", PYTHON_BER_DIR / "test_multi_tag.py"),
     (PYTHON_BER_DIR / "67-embedded-choice-OK.asn1", PYTHON_BER_DIR / "test_embedded_choice.py"),
 ]

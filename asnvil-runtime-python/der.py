@@ -20,6 +20,7 @@ from .errors import (
     SetNotCanonicalError,
     InvalidIntegerEncodingError,
     TruncatedInputError,
+    InvalidTagError,
 )
 
 
@@ -73,6 +74,15 @@ class DerEncoder(BerEncoder):
 
 class DerDecoder(BerDecoder):
     """DER decoder that validates canonicalization rules."""
+
+    def read_tag(self) -> tuple:
+        """Read tag, validating minimality (DER requirement)."""
+        start = self._pos
+        tag = super().read_tag()
+        consumed = self._pos - start
+        if consumed > 1 and tag[1] < 31:
+            raise InvalidTagError("Non-minimal tag: short form would suffice")
+        return tag
 
     def read_length(self) -> int | None:
         """Read length, rejecting indefinite and non-minimal forms."""

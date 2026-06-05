@@ -110,6 +110,7 @@ class BerDecoder:
         tag_class = (tag_byte >> 6) & 0x03
         constructed = bool(tag_byte & 0x20)
         number = tag_byte & 0x1F
+        long_form = False
 
         if number == 0x1F:
             number = 0

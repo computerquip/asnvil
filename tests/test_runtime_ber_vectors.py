@@ -21,6 +21,7 @@ from asnvil_runtime.errors import (
     TruncatedInputError,
     IndefiniteLengthNotAllowedError,
     InvalidIntegerEncodingError,
+    InvalidTagError,
 )
 from asnvil_runtime import TagClass
 
@@ -105,7 +106,7 @@ def _get_error_class(error_name: str):
         "TruncatedInputError": TruncatedInputError,
         "IndefiniteLengthNotAllowedError": IndefiniteLengthNotAllowedError,
         "InvalidIntegerEncodingError": InvalidIntegerEncodingError,
-        "InvalidTagError": AsnError,
+        "InvalidTagError": InvalidTagError,
         "AsnError": AsnError,
     }
     return error_map.get(error_name, AsnError)
@@ -322,3 +323,17 @@ class TestDerErrorHandling:
         decoder.read_tag()
         with pytest.raises(IndefiniteLengthNotAllowedError):
             decoder.read_length()
+
+    def test_der_rejects_non_minimal_tag(self) -> None:
+        """DER should reject non-minimal long-form tags."""
+        data = bytes([0x1F, 0x1E])  # Tag 30 in non-minimal long form
+        decoder = DerDecoder(data)
+        with pytest.raises(InvalidTagError):
+            decoder.read_tag()
+
+    def test_ber_rejects_non_minimal_tag(self) -> None:
+        """BER should accept non-minimal long-form tags (per X.690)."""
+        data = bytes([0x1F, 0x1E])  # Tag 30 in non-minimal long form
+        decoder = BerDecoder(data)
+        tag = decoder.read_tag()
+        assert tag == (0, 30, False)  # Should accept non-minimal BER
