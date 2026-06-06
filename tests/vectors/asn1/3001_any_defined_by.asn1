@@ -1,0 +1,18 @@
+-- =========================================================================
+-- asnvil Test Vector: 3001_any_defined_by.asn1
+-- Description: ANY DEFINED BY open type handling
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
+-- Test ANY DEFINED BY support
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+MessageType ::= ENUMERATED { text(0), integer(1), boolean(2) }
+
+Container ::= SEQUENCE {
+    msgType    MessageType,
+    msgValue   ANY DEFINED BY msgType
+}
+
+END;

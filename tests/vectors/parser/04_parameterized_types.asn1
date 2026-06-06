@@ -1,4 +1,0 @@
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyParamType ::= SEQUENCE { a INTEGER }
-    MyRef ::= MyParamType { INTEGER }
-END;

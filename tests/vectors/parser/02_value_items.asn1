@@ -1,7 +1,0 @@
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyType ::= SEQUENCE {
-        foo INTEGER,
-        bar BOOLEAN
-    }
-    MyValue MyType ::= { foo: 1, bar: TRUE }
-END;

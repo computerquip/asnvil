@@ -1,0 +1,14 @@
+-- =========================================================================
+-- asnvil Test Vector: 1001_value_items.asn1
+-- Description: Sequence values with lowercase identifier keys
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyType ::= SEQUENCE {
+        foo INTEGER,
+        bar BOOLEAN
+    }
+    MyValue MyType ::= { foo: 1, bar: TRUE }
+END;

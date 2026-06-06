@@ -14,23 +14,24 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = REPO_ROOT / "tests"
-INTEGRATION_DIR = TESTS_DIR / "integration"
-PYTHON_BER_DIR = INTEGRATION_DIR / "python" / "ber"
+VECTORS_DIR = TESTS_DIR / "vectors" / "asn1"
 RUNTIME_SRC = REPO_ROOT / "asnvil-runtime-python"
 
 # Specs and their corresponding test files
 TEST_SPECS: list[tuple[Path, Path]] = [
-    (TESTS_DIR / "explicit_choice.asn1", TESTS_DIR / "test_explicit_choice.py"),
-    (TESTS_DIR / "inline_choice.asn1", TESTS_DIR / "test_inline_choice.py"),
-    (TESTS_DIR / "any_defined_by.asn1", TESTS_DIR / "test_any_defined_by.py"),
-    (INTEGRATION_DIR / "x509_certificate.asn1", INTEGRATION_DIR / "test_x509_roundtrip.py"),
-    (INTEGRATION_DIR / "ldap_protocol.asn1", INTEGRATION_DIR / "test_ldap_roundtrip.py"),
-    (INTEGRATION_DIR / "snmp_protocol.asn1", INTEGRATION_DIR / "test_snmp_roundtrip.py"),
-    # Python BER integration tests (Phase 3)
-    (PYTHON_BER_DIR / "62-any-OK.asn1", PYTHON_BER_DIR / "test_any_decode.py"),
-    (PYTHON_BER_DIR / "43-recursion-OK.asn1", PYTHON_BER_DIR / "test_recursive.py"),
-    (PYTHON_BER_DIR / "65-multi-tag-OK.asn1", PYTHON_BER_DIR / "test_multi_tag.py"),
-    (PYTHON_BER_DIR / "67-embedded-choice-OK.asn1", PYTHON_BER_DIR / "test_embedded_choice.py"),
+    # Code Generation (3000-series)
+    (VECTORS_DIR / "3000_explicit_choice.asn1", TESTS_DIR / "test_explicit_choice.py"),
+    (VECTORS_DIR / "3002_inline_choice.asn1", TESTS_DIR / "test_inline_choice.py"),
+    (VECTORS_DIR / "3001_any_defined_by.asn1", TESTS_DIR / "test_any_defined_by.py"),
+    # End-to-End Integration (4000-series)
+    (VECTORS_DIR / "4000_x509_subset.asn1", TESTS_DIR / "integration" / "test_x509_roundtrip.py"),
+    (VECTORS_DIR / "4001_ldap_subset.asn1", TESTS_DIR / "integration" / "test_ldap_roundtrip.py"),
+    (VECTORS_DIR / "4002_snmp_subset.asn1", TESTS_DIR / "integration" / "test_snmp_roundtrip.py"),
+    # Python BER integration tests (4000-series continued)
+    (VECTORS_DIR / "4003_any_decode.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_any_decode.py"),
+    (VECTORS_DIR / "4004_recursive.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_recursive.py"),
+    (VECTORS_DIR / "4005_multi_tag.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_multi_tag.py"),
+    (VECTORS_DIR / "4006_embedded_choice.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_embedded_choice.py"),
 ]
 
 

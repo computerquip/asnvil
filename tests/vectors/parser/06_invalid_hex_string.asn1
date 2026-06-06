@@ -1,3 +1,0 @@
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyOctetInvalid OCTET STRING ::= 'GHIJ'H
-END;

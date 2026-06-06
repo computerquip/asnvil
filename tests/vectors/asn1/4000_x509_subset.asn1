@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4000_x509_subset.asn1
+-- Description: Simplified RFC 5912 X.509 certificate structure
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Simplified X.509 Certificate Module
 -- Based on RFC 5912 PKIX1Explicit-2009
 -- Simplified to work within current compiler capabilities

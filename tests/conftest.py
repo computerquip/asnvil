@@ -45,7 +45,7 @@ def compile_asn1():
 
     Usage:
         def test_something(compile_asn1):
-            output_dir = compile_asn1("tests/explicit_choice.asn1")
+            output_dir = compile_asn1("tests/vectors/asn1/3000_explicit_choice.asn1")
             # output_dir has compiled .py files and asnvil_runtime/
     """
     dirs_to_cleanup = []
@@ -91,7 +91,7 @@ def compile_asn1():
 
 @pytest.fixture
 def generated_module(compile_asn1):
-    """Compile the default test module (inline_choice.asn1) and set up imports.
+    """Compile the default test module (inline_choice) and set up imports.
 
     Usage:
         def test_something(generated_module, compile_asn1):
@@ -99,7 +99,7 @@ def generated_module(compile_asn1):
             sys.path.insert(0, str(generated_module))
             from TestModule import Person
     """
-    output_dir = compile_asn1("tests/inline_choice.asn1")
+    output_dir = compile_asn1("tests/vectors/asn1/3002_inline_choice.asn1")
     if str(output_dir) not in sys.path:
         sys.path.insert(0, str(output_dir))
     return output_dir

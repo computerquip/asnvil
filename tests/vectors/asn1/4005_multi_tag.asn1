@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4005_multi_tag.asn1
+-- Description: Multiple tagged fields roundtrip
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Multi-tag test module
 -- Tests nested implicit/explicit tagging chains
 

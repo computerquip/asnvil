@@ -32,10 +32,10 @@ mod tests {
         grammar.result.expect("grammar should produce a result")
     }
 
-    /// Helper to load a parser vector file from the tests/vectors/parser directory.
+    /// Helper to load an ASN.1 vector file from the unified tests/vectors/asn1 directory.
     fn load_vector(name: &str) -> String {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("../tests/vectors/parser");
+        path.push("../tests/vectors/asn1");
         path.push(name);
         std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read vector file: {:?}", path))
     }
@@ -132,9 +132,9 @@ END;
     }
 
     #[test]
-    fn test_parser_vector_imports() {
+    fn test_vector_1000_imports() {
         // Tests module imports, exports, and type assignments from a file.
-        let source = load_vector("01_imports.asn1");
+        let source = load_vector("1000_imports.asn1");
         let ast = parse_source(&source);
         
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
@@ -157,8 +157,8 @@ END;
     }
 
     #[test]
-    fn test_parser_vector_hex_strings() {
-        let source = load_vector("05_hex_strings.asn1");
+    fn test_vector_1004_hex_strings() {
+        let source = load_vector("1004_hex_strings.asn1");
         
         let valid_value = parse_value(&source, "MyOctetValid");
         match valid_value {
@@ -174,9 +174,9 @@ END;
     }
 
     #[test]
-    fn test_parser_vector_invalid_hex_string() {
+    fn test_vector_1005_invalid_hex_string() {
         // R5: Invalid hex digits should produce a parse error, not silently become 0.
-        let source = load_vector("06_invalid_hex_string.asn1");
+        let source = load_vector("1005_invalid_hex_string.asn1");
         let mut grammar = crate::grammar::Grammar::new();
         let result = parse(
             &source,
@@ -226,9 +226,9 @@ END;
     }
 
     #[test]
-    fn test_parser_vector_value_items() {
+    fn test_vector_1001_value_items() {
         // Tests lowercase identifier with colon in sequence value.
-        let source = load_vector("02_value_items.asn1");
+        let source = load_vector("1001_value_items.asn1");
         let value = parse_value(&source, "MyValue");
         match value {
             AsnValue::Sequence(items) => {
@@ -249,9 +249,9 @@ END;
     }
 
     #[test]
-    fn test_parser_vector_parameterized_types() {
+    fn test_vector_1003_parameterized_types() {
         // Tests referenced types with parameters.
-        let source = load_vector("04_parameterized_types.asn1");
+        let source = load_vector("1003_parameterized_types.asn1");
         let ty = parse_type(&source, "MyRef");
         match ty {
             AsnType::Referenced { name, parameters, .. } => {
@@ -264,10 +264,10 @@ END;
     }
 
     #[test]
-    fn test_parser_vector_named_numbers() {
+    fn test_vector_1002_named_numbers() {
         // Verifies that named_number properly pops the Reference from str_stack,
         // preventing stack pollution that would corrupt downstream parsing.
-        let source = load_vector("03_named_numbers.asn1");
+        let source = load_vector("1002_named_numbers.asn1");
         // If stack pollution occurs, parsing NextType will fail or be corrupted
         let next_ty = parse_type(&source, "NextType");
         match next_ty {

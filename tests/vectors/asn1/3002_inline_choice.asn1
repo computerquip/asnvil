@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 3002_inline_choice.asn1
+-- Description: Inline CHOICE types within SEQUENCE fields
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Test ASN.1 file with inline CHOICE as SEQUENCE field
 TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 

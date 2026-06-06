@@ -1,0 +1,11 @@
+-- =========================================================================
+-- asnvil Test Vector: 1003_parameterized_types.asn1
+-- Description: Referenced types with actual parameters
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyParamType ::= SEQUENCE { a INTEGER }
+    MyRef ::= MyParamType { INTEGER }
+END;

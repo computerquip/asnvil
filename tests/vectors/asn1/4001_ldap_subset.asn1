@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4001_ldap_subset.asn1
+-- Description: Simplified RFC 4511 LDAP protocol structure
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Simplified LDAP Protocol Module
 -- Based on RFC 4511 LDAPv3 protocol specification
 -- Simplified to work within current compiler capabilities

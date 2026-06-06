@@ -1,0 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 1005_invalid_hex_string.asn1
+-- Description: Invalid hex string literals (expected parse error)
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyOctetInvalid OCTET STRING ::= 'GHIJ'H
+END;

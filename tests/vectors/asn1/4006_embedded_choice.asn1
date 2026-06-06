@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4006_embedded_choice.asn1
+-- Description: Embedded CHOICE types roundtrip
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Embedded choice test module
 -- Tests embedded CHOICE with AUTOMATIC TAGS
 

@@ -3,8 +3,8 @@ import pytest
 
 def compile_and_import(tmp_path):
     import subprocess, shutil, sys
-    asn_file = tmp_path / "constrained_types.asn1"
-    shutil.copy("tests/integration/constrained_types.asn1", asn_file)
+    asn_file = tmp_path / "2000_constrained_types.asn1"
+    shutil.copy("tests/vectors/asn1/2000_constrained_types.asn1", asn_file)
     out_dir = tmp_path / "out"
     out_dir.mkdir()
     runtime_dir = tmp_path / "asnvil_runtime"

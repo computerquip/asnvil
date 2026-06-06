@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4004_recursive.asn1
+-- Description: Recursive type definitions roundtrip
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Recursive types test module
 -- Tests recursive types (SET OF self, SEQUENCE OF self, recursive CHOICE)
 

@@ -1,0 +1,20 @@
+-- =========================================================================
+-- asnvil Test Vector: 2000_constrained_types.asn1
+-- Description: Value ranges, size constraints, and single-value constraints
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
+ConstrainedTypes DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    PortNumber ::= INTEGER (0..65535)
+
+    UserRecord ::= SEQUENCE {
+        id INTEGER (0..1000),
+        name UTF8String (SIZE(1..50)),
+        age INTEGER (0..150),
+        status INTEGER (1..5) DEFAULT 1,
+        notes UTF8String (SIZE(0..200)) OPTIONAL
+    }
+
+    SmallList ::= SEQUENCE OF INTEGER (SIZE(0..10))
+END;

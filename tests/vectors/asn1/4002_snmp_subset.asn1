@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4002_snmp_subset.asn1
+-- Description: Simplified SNMP protocol structure
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Simplified SNMP Protocol Module
 -- Based on RFC 3416 SNMPv2-MIB
 -- Simplified to work within current compiler capabilities

@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 3000_explicit_choice.asn1
+-- Description: Explicitly tagged CHOICE alternatives
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- Test module for explicitly tagged CHOICE alternatives
 -- This tests disambiguation of same-tag types via explicit tagging
 

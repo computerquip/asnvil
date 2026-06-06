@@ -1,3 +1,10 @@
+-- =========================================================================
+-- asnvil Test Vector: 4003_any_decode.asn1
+-- Description: ANY type decoding roundtrip
+-- Attribution: Adapted from vlm/asn1c project (MIT license)
+--              https://github.com/vlm/asn1c
+-- =========================================================================
+
 -- 62-any-OK.asn1
 -- Adapted from vlm/asn1c tests-c-compiler/data-62/
 -- Tests ANY, SEQUENCE with ANY, SET with ANY, CHOICE with ANY
