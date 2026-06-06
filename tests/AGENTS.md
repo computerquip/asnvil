@@ -36,9 +36,9 @@ When `python3 tests/run_integration.py` (or `just test-integration`) is executed
 ## ➕ How to Add New Tests
 
 ### 1. Parser / AST Tests
-- **Location**: `asnvil-parser/src/lib.rs` (inside the `#[cfg(test)] mod tests` block).
-- **Action**: Use the built-in `load_vector("<folder_name>", "schema.asn1")` helper to read the ASN.1 source, then assert on the resulting `ast::Module`.
-- **Rule**: Do not use inline ASN.1 strings. Always create a corresponding folder in `tests/vectors/<feature_name>/` with a `schema.asn1` file.
+- **Location**: `asnvil-parser/tests/parser_vectors.rs`.
+- **Action**: Use standard Rust file reading (e.g., `std::fs::read_to_string("../tests/vectors/<feature_name>/schema.asn1")`) to load the schema, then call the public `asnvil_parser::parse` function and assert on the resulting `ast::Module`.
+- **Rule**: Do not use inline ASN.1 strings. Always place the schema in `tests/vectors/<feature_name>/schema.asn1`.
 
 ### 2. Pure Runtime Tests
 - **Location**: `tests/vectors/runtime_tests/`
@@ -55,7 +55,7 @@ When `python3 tests/run_integration.py` (or `just test-integration`) is executed
 
 ## ⚠️ Critical Constraints & Anti-Patterns
 - **NEVER hardcode test paths** in `run_integration.py`. The runner must remain purely extension-driven.
-- **NEVER use inline ASN.1 strings** in parser tests. Always use `load_vector()`.
+- **NEVER use inline ASN.1 strings** in parser tests. Always read from `tests/vectors/<feature_name>/schema.asn1`.
 - **Module Naming**: Python imports in integration tests must match the `MODULE IDENTIFIER` defined inside the `.asn1` file, not the `.asn1` filename.
 - **Co-location**: Do not scatter related test files across different directories. If a test needs a schema and a YAML payload, they belong in the same `tests/vectors/<feature_name>/` folder.
 - **Cleanup**: If you move or rename a test vector, ensure no orphaned files (like old `test_*.py` or `schema.asn1`) are left behind in the old location.
