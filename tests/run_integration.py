@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = REPO_ROOT / "tests"
-VECTORS_DIR = TESTS_DIR / "vectors" / "integration"
+VECTORS_DIR = TESTS_DIR / "vectors"
 RUNTIME_SRC = REPO_ROOT / "asnvil-runtime-python"
 
 
@@ -56,7 +56,7 @@ def run_python_tests(test_files: list[Path], output_dir: Path) -> bool:
     
     test_files_str = [str(f) for f in test_files]
     result = subprocess.run(
-        ["uv", "run", "--with", "pytest", "pytest"] + test_files_str + ["-v"],
+        ["uv", "run", "--with", "pytest", "--with", "pyyaml", "pytest"] + test_files_str + ["-v"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -69,23 +69,24 @@ def run_python_tests(test_files: list[Path], output_dir: Path) -> bool:
 
 
 def discover_suites() -> list[dict]:
-    """Dynamically discover all integration test suites based on file extensions."""
+    """Dynamically discover all test suites based on file extensions."""
     suites = []
     for folder in VECTORS_DIR.iterdir():
-        if not folder.is_dir():
+        if not folder.is_dir() or folder.name.startswith("."):
             continue
         
         asn1_files = sorted(folder.glob("*.asn1"))
         py_test_files = sorted(folder.glob("test_*.py"))
-        # Future: rs_test_files = sorted(folder.glob("test_*.rs"))
-        # Future: go_test_files = sorted(folder.glob("test_*.go"))
+        rs_test_files = sorted(folder.glob("test_*.rs"))
         
-        if asn1_files and py_test_files:
+        # A suite is valid if it has test files (asn1 files are optional for pure runtime tests)
+        if py_test_files or rs_test_files:
             suites.append({
                 "name": folder.name,
                 "folder": folder,
                 "asn1_files": asn1_files,
                 "py_test_files": py_test_files,
+                "rs_test_files": rs_test_files,
             })
             
     # Sort suites by name for consistent output
@@ -113,8 +114,13 @@ def main() -> None:
             output_dir.mkdir()
 
             try:
-                compile_asn1_files(suite["asn1_files"], output_dir)
-                copy_runtime(output_dir)
+                # Only compile if there are .asn1 files
+                if suite["asn1_files"]:
+                    compile_asn1_files(suite["asn1_files"], output_dir)
+                
+                # Copy runtime if there are Python tests (needed for 'import asnvil_runtime')
+                if suite["py_test_files"]:
+                    copy_runtime(output_dir)
                 
                 ok = True
                 if suite["py_test_files"]:

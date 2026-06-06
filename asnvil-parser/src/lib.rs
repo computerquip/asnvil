@@ -75,7 +75,7 @@ mod tests {
     fn test_parser_value_sequences() {
         // Tests sequence values with DEFAULT clauses and value collection.
         // Also verifies downstream types parse correctly (would fail if stack polluted).
-        let source = load_vector("parser/value_sequences", "schema.asn1");
+        let source = load_vector("value_sequences", "schema.asn1");
         
         let _status_ty = parse_type(&source, "Status");
         let _next_ty = parse_type(&source, "NextType");
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_parser_imports() {
-        let source = load_vector("parser/imports", "schema.asn1");
+        let source = load_vector("imports", "schema.asn1");
         let ast = parse_source(&source);
         
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_parser_hex_strings() {
-        let source = load_vector("parser/hex_strings", "schema.asn1");
+        let source = load_vector("hex_strings", "schema.asn1");
         
         let valid_value = parse_value(&source, "MyOctetValid");
         match valid_value {
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_parser_invalid_hex_string() {
-        let source = load_vector("parser/invalid_hex_string", "schema.asn1");
+        let source = load_vector("invalid_hex_string", "schema.asn1");
         let mut grammar = crate::grammar::Grammar::new();
         let result = parse(
             &source,
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_parser_reference_imports_exports() {
-        let source = load_vector("parser/reference_imports_exports", "schema.asn1");
+        let source = load_vector("reference_imports_exports", "schema.asn1");
         let ast = parse_source(&source);
         
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_parser_value_items() {
-        let source = load_vector("parser/value_items", "schema.asn1");
+        let source = load_vector("value_items", "schema.asn1");
         let value = parse_value(&source, "MyValue");
         match value {
             AsnValue::Sequence(items) => {
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_parser_parameterized_types() {
-        let source = load_vector("parser/parameterized_types", "schema.asn1");
+        let source = load_vector("parameterized_types", "schema.asn1");
         let ty = parse_type(&source, "MyRef");
         match ty {
             AsnType::Referenced { name, parameters, .. } => {
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_parser_named_numbers() {
-        let source = load_vector("parser/named_numbers", "schema.asn1");
+        let source = load_vector("named_numbers", "schema.asn1");
         let next_ty = parse_type(&source, "NextType");
         match next_ty {
             AsnType::Boolean { .. } => {}
