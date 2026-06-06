@@ -45,7 +45,7 @@ def compile_asn1():
 
     Usage:
         def test_something(compile_asn1):
-            output_dir = compile_asn1("tests/vectors/asn1/3000_explicit_choice.asn1")
+            output_dir = compile_asn1("tests/vectors/integration/explicit_choice/schema.asn1")
             # output_dir has compiled .py files and asnvil_runtime/
     """
     dirs_to_cleanup = []
@@ -90,16 +90,26 @@ def compile_asn1():
 
 
 @pytest.fixture
-def generated_module(compile_asn1):
-    """Compile the default test module (inline_choice) and set up imports.
+def generated_module(compile_asn1, request):
+    """Compile the schema.asn1 in the current test directory and set up imports.
 
     Usage:
-        def test_something(generated_module, compile_asn1):
+        def test_something(generated_module):
             # generated_module is the output_dir path
             sys.path.insert(0, str(generated_module))
-            from TestModule import Person
+            # Import using the ASN.1 MODULE IDENTIFIER name, not the filename
+            # from TestModule import Person
     """
-    output_dir = compile_asn1("tests/vectors/asn1/3002_inline_choice.asn1")
+    test_dir = Path(request.fspath).parent
+    schema_path = test_dir / "schema.asn1"
+    
+    if not schema_path.exists():
+        raise FileNotFoundError(
+            f"Could not find schema.asn1 in {test_dir}. "
+            "Ensure the test is in a vector folder with a schema.asn1 file."
+        )
+        
+    output_dir = compile_asn1(schema_path)
     if str(output_dir) not in sys.path:
         sys.path.insert(0, str(output_dir))
     return output_dir

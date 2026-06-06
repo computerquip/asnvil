@@ -32,11 +32,10 @@ mod tests {
         grammar.result.expect("grammar should produce a result")
     }
 
-    /// Helper to load an ASN.1 vector file from the unified tests/vectors/asn1 directory.
-    fn load_vector(name: &str) -> String {
+    /// Helper to load an ASN.1 vector file from the semantic tests/vectors/ directory.
+    fn load_vector(category: &str, name: &str) -> String {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("../tests/vectors/asn1");
-        path.push(name);
+        path.push(format!("../tests/vectors/{}/{}", category, name));
         std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read vector file: {:?}", path))
     }
 
@@ -73,10 +72,10 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1007_value_sequences() {
+    fn test_parser_value_sequences() {
         // Tests sequence values with DEFAULT clauses and value collection.
         // Also verifies downstream types parse correctly (would fail if stack polluted).
-        let source = load_vector("1007_value_sequences.asn1");
+        let source = load_vector("parser/value_sequences", "schema.asn1");
         
         let _status_ty = parse_type(&source, "Status");
         let _next_ty = parse_type(&source, "NextType");
@@ -111,9 +110,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1000_imports() {
-        // Tests module imports, exports, and type assignments from a file.
-        let source = load_vector("1000_imports.asn1");
+    fn test_parser_imports() {
+        let source = load_vector("parser/imports", "schema.asn1");
         let ast = parse_source(&source);
         
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
@@ -136,8 +134,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1004_hex_strings() {
-        let source = load_vector("1004_hex_strings.asn1");
+    fn test_parser_hex_strings() {
+        let source = load_vector("parser/hex_strings", "schema.asn1");
         
         let valid_value = parse_value(&source, "MyOctetValid");
         match valid_value {
@@ -153,9 +151,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1005_invalid_hex_string() {
-        // R5: Invalid hex digits should produce a parse error, not silently become 0.
-        let source = load_vector("1005_invalid_hex_string.asn1");
+    fn test_parser_invalid_hex_string() {
+        let source = load_vector("parser/invalid_hex_string", "schema.asn1");
         let mut grammar = crate::grammar::Grammar::new();
         let result = parse(
             &source,
@@ -166,9 +163,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1006_reference_imports_exports() {
-        // R41: Import and export symbols must accept Reference (uppercase type names).
-        let source = load_vector("1006_reference_imports_exports.asn1");
+    fn test_parser_reference_imports_exports() {
+        let source = load_vector("parser/reference_imports_exports", "schema.asn1");
         let ast = parse_source(&source);
         
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
@@ -188,9 +184,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1001_value_items() {
-        // Tests lowercase identifier with colon in sequence value.
-        let source = load_vector("1001_value_items.asn1");
+    fn test_parser_value_items() {
+        let source = load_vector("parser/value_items", "schema.asn1");
         let value = parse_value(&source, "MyValue");
         match value {
             AsnValue::Sequence(items) => {
@@ -211,9 +206,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1003_parameterized_types() {
-        // Tests referenced types with parameters.
-        let source = load_vector("1003_parameterized_types.asn1");
+    fn test_parser_parameterized_types() {
+        let source = load_vector("parser/parameterized_types", "schema.asn1");
         let ty = parse_type(&source, "MyRef");
         match ty {
             AsnType::Referenced { name, parameters, .. } => {
@@ -226,11 +220,8 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_1002_named_numbers() {
-        // Verifies that named_number properly pops the Reference from str_stack,
-        // preventing stack pollution that would corrupt downstream parsing.
-        let source = load_vector("1002_named_numbers.asn1");
-        // If stack pollution occurs, parsing NextType will fail or be corrupted
+    fn test_parser_named_numbers() {
+        let source = load_vector("parser/named_numbers", "schema.asn1");
         let next_ty = parse_type(&source, "NextType");
         match next_ty {
             AsnType::Boolean { .. } => {}

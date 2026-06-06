@@ -1,7 +1,8 @@
-"""Self-contained integration test runner.
+"""Self-contained, multi-backend integration test runner.
 
-Compiles each .asn1 spec, copies the runtime, then runs pytest on the
-corresponding test_*.py file.  Removes hardcoded /tmp/ paths (R17).
+Dynamically discovers test suites in tests/vectors/integration/ based on
+file extensions (.asn1 for schemas, test_*.py for Python tests, etc.).
+Compiles schemas for detected backends and runs the corresponding test commands.
 """
 from __future__ import annotations
 
@@ -14,44 +15,28 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = REPO_ROOT / "tests"
-VECTORS_DIR = TESTS_DIR / "vectors" / "asn1"
+VECTORS_DIR = TESTS_DIR / "vectors" / "integration"
 RUNTIME_SRC = REPO_ROOT / "asnvil-runtime-python"
 
-# Specs and their corresponding test files
-TEST_SPECS: list[tuple[Path, Path]] = [
-    # Code Generation (3000-series)
-    (VECTORS_DIR / "3000_explicit_choice.asn1", TESTS_DIR / "test_explicit_choice.py"),
-    (VECTORS_DIR / "3002_inline_choice.asn1", TESTS_DIR / "test_inline_choice.py"),
-    (VECTORS_DIR / "3001_any_defined_by.asn1", TESTS_DIR / "test_any_defined_by.py"),
-    # End-to-End Integration (4000-series)
-    (VECTORS_DIR / "4000_x509_subset.asn1", TESTS_DIR / "integration" / "test_x509_roundtrip.py"),
-    (VECTORS_DIR / "4001_ldap_subset.asn1", TESTS_DIR / "integration" / "test_ldap_roundtrip.py"),
-    (VECTORS_DIR / "4002_snmp_subset.asn1", TESTS_DIR / "integration" / "test_snmp_roundtrip.py"),
-    # Python BER integration tests (4000-series continued)
-    (VECTORS_DIR / "4003_any_decode.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_any_decode.py"),
-    (VECTORS_DIR / "4004_recursive.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_recursive.py"),
-    (VECTORS_DIR / "4005_multi_tag.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_multi_tag.py"),
-    (VECTORS_DIR / "4006_embedded_choice.asn1", TESTS_DIR / "integration" / "python" / "ber" / "test_embedded_choice.py"),
-]
 
-
-def compile_asn1(asn1_path: Path, output_dir: Path) -> None:
-    """Run `cargo run -- -o <output_dir> <asn1_path>`."""
-    result = subprocess.run(
-        [
-            "cargo", "run", "--quiet", "--",
-            "-o", str(output_dir),
-            str(asn1_path),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(f"FAIL: cargo compile failed for {asn1_path.name}")
-        print(f"  stderr: {result.stderr}")
-        print(f"  stdout: {result.stdout}")
-        sys.exit(1)
+def compile_asn1_files(asn1_files: list[Path], output_dir: Path) -> None:
+    """Run `cargo run` to compile all provided .asn1 files into the output directory."""
+    for asn1_path in asn1_files:
+        result = subprocess.run(
+            [
+                "cargo", "run", "--quiet", "--",
+                "-o", str(output_dir),
+                str(asn1_path),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"FAIL: cargo compile failed for {asn1_path.name}")
+            print(f"  stderr: {result.stderr}")
+            print(f"  stdout: {result.stdout}")
+            sys.exit(1)
 
 
 def copy_runtime(output_dir: Path) -> None:
@@ -62,15 +47,16 @@ def copy_runtime(output_dir: Path) -> None:
     shutil.copytree(RUNTIME_SRC, dest)
 
 
-def run_pytest(test_file: Path, output_dir: Path) -> bool:
-    """Run pytest on the test file with output_dir on PYTHONPATH."""
+def run_python_tests(test_files: list[Path], output_dir: Path) -> bool:
+    """Run pytest on the provided Python test files with output_dir on PYTHONPATH."""
     env = os.environ.copy()
-    # Output dir MUST come first to shadow stale tests/TestModule.py
     existing_path = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(output_dir) + (":" + existing_path if existing_path else "")
     env["INTEG_OUTPUT_DIR"] = str(output_dir)
+    
+    test_files_str = [str(f) for f in test_files]
     result = subprocess.run(
-        ["uv", "run", "--with", "pytest", "pytest", str(test_file), "-v", "--noconftest"],
+        ["uv", "run", "--with", "pytest", "pytest"] + test_files_str + ["-v", "--noconftest"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -82,39 +68,75 @@ def run_pytest(test_file: Path, output_dir: Path) -> bool:
     return result.returncode == 0
 
 
-def main() -> None:
-    failures = 0
-    for asn1_path, test_file in TEST_SPECS:
-        if not asn1_path.exists():
-            print(f"SKIP: {asn1_path.name} not found")
+def discover_suites() -> list[dict]:
+    """Dynamically discover all integration test suites based on file extensions."""
+    suites = []
+    for folder in VECTORS_DIR.iterdir():
+        if not folder.is_dir():
             continue
-        if not test_file.exists():
-            print(f"SKIP: {test_file.name} not found")
-            continue
+        
+        asn1_files = sorted(folder.glob("*.asn1"))
+        py_test_files = sorted(folder.glob("test_*.py"))
+        # Future: rs_test_files = sorted(folder.glob("test_*.rs"))
+        # Future: go_test_files = sorted(folder.glob("test_*.go"))
+        
+        if asn1_files and py_test_files:
+            suites.append({
+                "name": folder.name,
+                "folder": folder,
+                "asn1_files": asn1_files,
+                "py_test_files": py_test_files,
+            })
+            
+    # Sort suites by name for consistent output
+    return sorted(suites, key=lambda x: x["name"])
 
-        print(f"\n{'=' * 60}")
-        print(f"Testing: {asn1_path.name} -> {test_file.name}")
+
+def main() -> None:
+    suites = discover_suites()
+    if not suites:
+        print("No integration test suites found in", VECTORS_DIR)
+        sys.exit(1)
+
+    print(f"Discovered {len(suites)} integration test suite(s).\n")
+    
+    failures = 0
+    for suite in suites:
+        print(f"{'=' * 60}")
+        print(f"Testing suite: {suite['name']}")
+        print(f"  Schemas: {', '.join(f.name for f in suite['asn1_files'])}")
+        print(f"  Tests:   {', '.join(f.name for f in suite['py_test_files'])}")
         print(f"{'=' * 60}")
 
         with tempfile.TemporaryDirectory(prefix="asnvil-test-") as tmpdir:
             output_dir = Path(tmpdir) / "output"
             output_dir.mkdir()
 
-            compile_asn1(asn1_path, output_dir)
-            copy_runtime(output_dir)
-            ok = run_pytest(test_file, output_dir)
+            try:
+                compile_asn1_files(suite["asn1_files"], output_dir)
+                copy_runtime(output_dir)
+                
+                ok = True
+                if suite["py_test_files"]:
+                    ok = run_python_tests(suite["py_test_files"], output_dir)
+                
+                # Future: if suite["rs_test_files"]: ok = run_rust_tests(...) and ok
 
-            if not ok:
+                if not ok:
+                    failures += 1
+                    print(f"FAIL: {suite['name']}")
+                else:
+                    print(f"PASS: {suite['name']}")
+            except Exception as e:
                 failures += 1
-                print(f"FAIL: {test_file.name}")
-            else:
-                print(f"PASS: {test_file.name}")
+                print(f"FAIL: {suite['name']} - {e}")
 
+    print(f"\n{'=' * 60}")
     if failures:
-        print(f"\n{failures} integration test suite(s) failed")
+        print(f"{failures} integration test suite(s) failed")
         sys.exit(1)
     else:
-        print(f"\nAll {len(TEST_SPECS)} integration test suites passed!")
+        print(f"All {len(suites)} integration test suites passed!")
 
 
 if __name__ == "__main__":
