@@ -7,7 +7,7 @@ from pathlib import Path
 @pytest.fixture
 def constrained_types_module(compile_asn1):
     """Compile the constrained types vector and load the generated Python module."""
-    output_dir = compile_asn1("tests/vectors/asn1/2000_constrained_types.asn1")
+    output_dir = compile_asn1("tests/vectors/integration/constrained_types/schema.asn1")
     spec = importlib.util.spec_from_file_location(
         "ConstrainedTypes", output_dir / "ConstrainedTypes.py"
     )

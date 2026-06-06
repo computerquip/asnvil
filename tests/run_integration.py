@@ -56,7 +56,7 @@ def run_python_tests(test_files: list[Path], output_dir: Path) -> bool:
     
     test_files_str = [str(f) for f in test_files]
     result = subprocess.run(
-        ["uv", "run", "--with", "pytest", "pytest"] + test_files_str + ["-v", "--noconftest"],
+        ["uv", "run", "--with", "pytest", "pytest"] + test_files_str + ["-v"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
