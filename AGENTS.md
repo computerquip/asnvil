@@ -406,12 +406,19 @@ class Person(AsnType):
 
 ### Test Architecture
 
-Test vectors are stored in shared YAML files under `tests/vectors/ber/data.yaml`, organized by encoding type (BER, PER, OER). Binary `.ber` files from asn1c are stored under `tests/vectors/ber/data-62/`. Integration tests are organized by language first, then encoding (`tests/integration/python/ber/`). This architecture supports future language targets (Rust, TypeScript, C, Go) and encoding targets (PER, OER, XER, JER).
+The test framework is flat, extension-driven, and co-located. All test data and scenarios live in `tests/vectors/`.
 
-Test vectors are adapted from the [vlm/asn1c](https://github.com/vlm/asn1c) project (MIT license), including tag encoding, length encoding, INTEGER encoding, and structured BER test vectors from `tests-skeletons` and `tests-c-compiler/data-62/`.
+- **Parser Tests**: Located in `asnvil-parser/tests/parser_vectors.rs`. They read `.asn1` schemas from `tests/vectors/<feature>/schema.asn1` and assert on the resulting public AST.
+- **Runtime Tests**: Located in `tests/vectors/runtime_tests/`. Pure Python unit tests for the `asnvil_runtime` package.
+- **Integration Tests**: Located in `tests/vectors/<feature>/`. Each feature folder contains its `schema.asn1` (and optionally `imports.asn1`), `test_*.py` (or `test_*.rs` for future backends), and optional `*.yaml` payload files. 
+- **Test Runner**: `tests/run_integration.py` dynamically discovers these folders, compiles any `.asn1` files found, and executes the corresponding language-specific tests.
+
+See `tests/AGENTS.md` and `tests/README.md` for detailed instructions on adding and running tests.
+
+Test vectors for BER/DER are adapted from the [vlm/asn1c](https://github.com/vlm/asn1c) project (MIT license).
 
 ### Current Test Counts
-- Rust: 48 tests (9 parser + 14 IR + 12 codegen + 13 CLI)
+- Rust: ~48 tests (8 parser integration + 14 IR + 12 codegen + 13 CLI + others)
 - Python runtime: 55 unit tests
 - Python BER vectors: 111 tests (20 tag + 9 length + 30 integer + 16 structured + 28 error + 7 DER error + 2 non-minimal tag tests)
 - Integration: 10 suites, 96 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 10 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types + 10 any decode + 9 recursive + 8 multi-tag + 10 embedded choice)
