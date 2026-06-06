@@ -40,9 +40,8 @@ impl<T> Stack<T> {
         items.reverse();
         Ok(items)
     }
-    fn drain_rev(&mut self) -> Vec<T> {
-        let items: Vec<T> = self.inner.drain(..).rev().collect();
-        items
+    fn drain(&mut self) -> Vec<T> {
+        self.inner.drain(..).collect()
     }
 }
 
@@ -937,7 +936,7 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
                 ast::AsnValue::CharString(text[1..text.len() - 1].to_string())
             }
             Value::LBraceValueItemsRBrace(_inner) => {
-                let items: Vec<ast::NamedValue> = self.named_value_stack.drain_rev();
+                let items: Vec<ast::NamedValue> = self.named_value_stack.drain();
                 ast::AsnValue::Sequence(items)
             }
         Value::Identifier(inner) => {

@@ -1,0 +1,9 @@
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    EXPORTS MyType, AnotherType;
+    IMPORTS INTEGER, SEQUENCE, OCTET FROM SpecModule;
+    
+    MyType ::= SEQUENCE {
+        a INTEGER
+    }
+    AnotherType ::= BOOLEAN
+END;

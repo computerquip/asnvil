@@ -1,0 +1,4 @@
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyInt ::= INTEGER { foo( Bar ), baz( 2 ) }
+    NextType ::= BOOLEAN
+END;

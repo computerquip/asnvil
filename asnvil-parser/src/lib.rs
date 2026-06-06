@@ -23,6 +23,7 @@ mod tests {
     use crate::ast::{AsnType, AsnValue, Assignment, ExportSymbols, Module};
     use crate::grammar::Grammar;
     use crate::parse;
+    use std::path::PathBuf;
 
     fn parse_source(source: &str) -> Module {
         let mut grammar = Grammar::new();
@@ -31,54 +32,65 @@ mod tests {
         grammar.result.expect("grammar should produce a result")
     }
 
-    #[test]
-    fn test_value_sequence_in_default() {
-        // Uses a SEQUENCE OF with a single-value DEFAULT to avoid
-        // value_stack pollution from the broken {ValueItems} collection.
-        // The bug: value_item pushes to value_stack but LBraceValueItemsRBrace
-        // creates Vec::new() instead of collecting them, leaving orphans on the stack.
-        let ast = parse_source(
-            r#"
-            TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-                Status ::= BOOLEAN
-                Thing ::= SEQUENCE {
-                    active Status DEFAULT TRUE
-                }
-            END;
-            "#,
-        );
+    /// Helper to load a parser vector file from the tests/vectors/parser directory.
+    fn load_vector(name: &str) -> String {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("../tests/vectors/parser");
+        path.push(name);
+        std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read vector file: {:?}", path))
+    }
 
-        // First verify basic DEFAULT parsing works
-        let thing_assignment = ast
+    /// Helper to parse a source and extract a specific type assignment by name.
+    fn parse_type(source: &str, type_name: &str) -> AsnType {
+        let ast = parse_source(source);
+        let assignment = ast
             .body
             .assignments
             .iter()
-            .find(|a| {
-                if let Assignment::Type(ta) = a {
-                    ta.name == "Thing"
-                } else {
-                    false
-                }
-            })
-            .expect("should have Thing assignment");
+            .find(|a| matches!(a, Assignment::Type(ta) if ta.name == type_name))
+            .unwrap_or_else(|| panic!("Type assignment '{}' not found", type_name));
 
-        let seq = match thing_assignment {
-            Assignment::Type(ta) => match &ta.ty {
-                AsnType::Sequence { fields, .. } => fields,
-                other => panic!("expected Sequence, got {:?}", other),
-            },
+        match assignment {
+            Assignment::Type(ta) => ta.ty.clone(),
             _ => unreachable!(),
-        };
+        }
+    }
 
-        let active_field = seq
+    /// Helper to parse a source and extract a specific value assignment by name.
+    fn parse_value(source: &str, value_name: &str) -> AsnValue {
+        let ast = parse_source(source);
+        let assignment = ast
+            .body
+            .assignments
             .iter()
-            .find(|f| f.name == "active")
-            .expect("should have active field");
+            .find(|a| matches!(a, Assignment::Value(va) if va.name == value_name))
+            .unwrap_or_else(|| panic!("Value assignment '{}' not found", value_name));
 
-        assert!(
-            active_field.default.is_some(),
-            "active field should have a DEFAULT value"
-        );
+        match assignment {
+            Assignment::Value(va) => va.value.clone(),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_value_sequence_in_default() {
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    Status ::= BOOLEAN
+    Thing ::= SEQUENCE {
+        active Status DEFAULT TRUE
+    }
+END;
+"#;
+        let ty = parse_type(source, "Thing");
+        match ty {
+            AsnType::Sequence { fields, .. } => {
+                let active_field = fields.iter().find(|f| f.name == "active")
+                    .expect("should have active field");
+                assert!(active_field.default.is_some(), "active field should have a DEFAULT value");
+            }
+            other => panic!("expected Sequence, got {:?}", other),
+        }
     }
 
     #[test]
@@ -86,197 +98,88 @@ mod tests {
         // Tests that { ValueItems } actually collects values from the value_stack.
         // The bug: LBraceValueItemsRBrace creates Vec::new() instead of
         // popping values pushed by value_item callbacks.
-        //
         // Using a standalone type that comes AFTER the one with the DEFAULT
         // to detect whether the value_stack pollution breaks downstream parsing.
-        let asn1_source = r#"
+        let source = r#"
 TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-Colors ::= ENUMERATED { red(0), green(1), blue(2) }
-Shape ::= SEQUENCE {
-    color Colors DEFAULT { red }
-}
-Status ::= BOOLEAN
+    Colors ::= ENUMERATED { red(0), green(1), blue(2) }
+    Shape ::= SEQUENCE {
+        color Colors DEFAULT { red }
+    }
+    Status ::= BOOLEAN
 END;
 "#;
-        let ast = parse_source(asn1_source);
-
-        // Verify that downstream types were parsed correctly
-        // (they won't be if value_stack pollution corrupts parsing)
-        let _status_assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Type(ta) = a {
-                    ta.name == "Status"
-                } else {
-                    false
+        // Verify downstream types parse correctly (would fail if stack polluted)
+        let _status_ty = parse_type(source, "Status");
+        
+        let shape_ty = parse_type(source, "Shape");
+        match shape_ty {
+            AsnType::Sequence { fields, .. } => {
+                let color_field = fields.iter().find(|f| f.name == "color")
+                    .expect("should have color field");
+                let default = color_field.default.as_ref()
+                    .expect("color field should have a DEFAULT value");
+                
+                match default {
+                    AsnValue::Sequence(items) => {
+                        assert!(!items.is_empty(), "value sequence should contain parsed items");
+                    }
+                    other => panic!("expected AsnValue::Sequence, got {:?}", other),
                 }
-            })
-            .expect("Status assignment should exist — value_stack pollution from {} broke downstream parsing");
-
-        let shape_assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Type(ta) = a {
-                    ta.name == "Shape"
-                } else {
-                    false
-                }
-            })
-            .expect("should have Shape assignment");
-
-        let seq = match shape_assignment {
-            Assignment::Type(ta) => match &ta.ty {
-                AsnType::Sequence { fields, .. } => fields,
-                other => panic!("expected Sequence, got {:?}", other),
-            },
-            _ => unreachable!(),
-        };
-
-        let color_field = seq
-            .iter()
-            .find(|f| f.name == "color")
-            .expect("should have color field");
-
-        let default = color_field
-            .default
-            .as_ref()
-            .expect("color field should have a DEFAULT value");
-
-        match default {
-            AsnValue::Sequence(items) => {
-                assert!(
-                    !items.is_empty(),
-                    "value sequence should contain parsed items, but got empty Vec — \
-                     this is the R1 bug: LBraceValueItemsRBrace ignores value_stack"
-                );
             }
-            other => panic!("expected AsnValue::Sequence for DEFAULT value, got {:?}", other),
+            other => panic!("expected Sequence, got {:?}", other),
         }
     }
 
     #[test]
-    fn test_import_keyword_symbols() {
-        // R2: import_symbol must handle ALL IdentifierOrKeyword variants,
-        // not just Identifier. Keywords like INTEGER, SEQUENCE, OCTET, etc.
-        // were falling through to `format!("{:?}", ...)` producing debug strings.
-        // Note: The grammar only accepts keywords (not arbitrary References)
-        // in import positions, so we test with actual ASN.1 keywords.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    IMPORTS INTEGER FROM OtherModule;
-    MyType ::= BOOLEAN
-END;
-"#;
-        let ast = parse_source(source);
-        assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
-        let import = &ast.body.imports[0];
-        assert_eq!(import.symbols.len(), 1);
-        assert_eq!(import.symbols[0], "INTEGER");
-        assert_eq!(import.module, "OtherModule");
-    }
-
-    #[test]
-    fn test_import_multiple_keyword_symbols() {
-        // Verify multiple keyword-named symbols are imported correctly.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    IMPORTS INTEGER, SEQUENCE, OCTET FROM SpecModule;
-    MyType ::= BOOLEAN
-END;
-"#;
-        let ast = parse_source(source);
+    fn test_parser_vector_imports() {
+        // Tests module imports, exports, and type assignments from a file.
+        let source = load_vector("01_imports.asn1");
+        let ast = parse_source(&source);
+        
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
         let import = &ast.body.imports[0];
         assert_eq!(import.symbols.len(), 3);
         assert_eq!(import.symbols, &["INTEGER", "SEQUENCE", "OCTET"]);
         assert_eq!(import.module, "SpecModule");
+
+        let exports = ast.body.exports.as_ref().expect("should have EXPORTS");
+        match &exports.symbols {
+            ExportSymbols::Symbols(symbols) => {
+                assert_eq!(symbols.len(), 2);
+                assert_eq!(symbols, &["MyType", "AnotherType"]);
+            }
+            other => panic!("expected Symbols variant, got {:?}", other),
+        }
+
+        let _my_type = parse_type(&source, "MyType");
+        let _another_type = parse_type(&source, "AnotherType");
     }
 
     #[test]
-    fn test_valid_hex_string_value() {
-        // R5: Hex strings should parse correctly with valid hex digits.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyOctet OCTET STRING ::= 'DEADBEEF'H
-END;
-"#;
-        let ast = parse_source(source);
-        let assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Value(va) = a {
-                    va.name == "MyOctet"
-                } else {
-                    false
-                }
-            })
-            .expect("should have MyOctet assignment");
+    fn test_parser_vector_hex_strings() {
+        let source = load_vector("05_hex_strings.asn1");
+        
+        let valid_value = parse_value(&source, "MyOctetValid");
+        match valid_value {
+            AsnValue::HexString(bytes) => assert_eq!(bytes, &[0xDE, 0xAD, 0xBE, 0xEF]),
+            other => panic!("expected HexString, got {:?}", other),
+        }
 
-        let value = match assignment {
-            Assignment::Value(va) => &va.value,
-            _ => unreachable!(),
-        };
-
-        match value {
-            AsnValue::HexString(bytes) => {
-                assert_eq!(bytes, &[0xDE, 0xAD, 0xBE, 0xEF]);
-            }
+        let odd_value = parse_value(&source, "MyOctetOdd");
+        match odd_value {
+            AsnValue::HexString(bytes) => assert_eq!(bytes, &[0x0A, 0xBC]),
             other => panic!("expected HexString, got {:?}", other),
         }
     }
 
     #[test]
-    fn test_odd_length_hex_string_value() {
-        // R5: Odd-length hex strings should be zero-padded and parse correctly.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyOctet OCTET STRING ::= 'ABC'H
-END;
-"#;
-        let ast = parse_source(source);
-        let assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Value(va) = a {
-                    va.name == "MyOctet"
-                } else {
-                    false
-                }
-            })
-            .expect("should have MyOctet assignment");
-
-        let value = match assignment {
-            Assignment::Value(va) => &va.value,
-            _ => unreachable!(),
-        };
-
-        match value {
-            AsnValue::HexString(bytes) => {
-                assert_eq!(bytes, &[0x0A, 0xBC]);
-            }
-            other => panic!("expected HexString, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn test_invalid_hex_string_value() {
+    fn test_parser_vector_invalid_hex_string() {
         // R5: Invalid hex digits should produce a parse error, not silently become 0.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    my-octet-value OCTET STRING ::= 'GHIJ'H
-END;
-"#;
+        let source = load_vector("06_invalid_hex_string.asn1");
         let mut grammar = crate::grammar::Grammar::new();
         let result = parse(
-            source,
+            &source,
             std::path::Path::new("test.asn1"),
             &mut grammar,
         );
@@ -323,43 +226,22 @@ END;
     }
 
     #[test]
-    fn test_value_item_lowercase_identifier_with_colon() {
-        // Issue 1: ValueItem grammar does not support lowercase Identifier followed by ':' Value.
-        // It only supports Reference ':' Value. This causes parse errors for { foo: 1 }.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyType ::= SEQUENCE {
-        foo INTEGER
-    }
-    MyValue MyType ::= { foo: 1 }
-END;
-"#;
-        let ast = parse_source(source);
-        let assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Value(va) = a {
-                    va.name == "MyValue"
-                } else {
-                    false
-                }
-            })
-            .expect("should have MyValue assignment");
-
-        let value = match assignment {
-            Assignment::Value(va) => &va.value,
-            _ => unreachable!(),
-        };
-
+    fn test_parser_vector_value_items() {
+        // Tests lowercase identifier with colon in sequence value.
+        let source = load_vector("02_value_items.asn1");
+        let value = parse_value(&source, "MyValue");
         match value {
             AsnValue::Sequence(items) => {
-                assert_eq!(items.len(), 1);
+                assert_eq!(items.len(), 2);
                 assert_eq!(items[0].name, "foo");
                 match &items[0].value {
                     AsnValue::Integer(n) => assert_eq!(n.to_string(), "1"),
                     other => panic!("expected Integer, got {:?}", other),
+                }
+                assert_eq!(items[1].name, "bar");
+                match &items[1].value {
+                    AsnValue::Boolean(b) => assert!(*b),
+                    other => panic!("expected Boolean, got {:?}", other),
                 }
             }
             other => panic!("expected Sequence, got {:?}", other),
@@ -367,39 +249,14 @@ END;
     }
 
     #[test]
-    fn test_referenced_type_with_parameters() {
-        // Issue 2: referenced_type uses .unwrap() on optional access.
-        // This test exercises the code path to ensure it works without unwraps.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyParamType ::= SEQUENCE { a INTEGER }
-    MyRef ::= MyParamType { INTEGER }
-END;
-"#;
-        let ast = parse_source(source);
-        let assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Type(ta) = a {
-                    ta.name == "MyRef"
-                } else {
-                    false
-                }
-            })
-            .expect("should have MyRef assignment");
-
-        let ty = match assignment {
-            Assignment::Type(ta) => &ta.ty,
-            _ => unreachable!(),
-        };
-
+    fn test_parser_vector_parameterized_types() {
+        // Tests referenced types with parameters.
+        let source = load_vector("04_parameterized_types.asn1");
+        let ty = parse_type(&source, "MyRef");
         match ty {
             AsnType::Referenced { name, parameters, .. } => {
                 assert_eq!(name, "MyParamType");
-                assert!(parameters.is_some());
-                let params = parameters.as_ref().unwrap();
+                let params = parameters.as_ref().expect("should have parameters");
                 assert_eq!(params.len(), 1);
             }
             other => panic!("expected Referenced, got {:?}", other),
@@ -407,41 +264,15 @@ END;
     }
 
     #[test]
-    fn test_named_number_with_reference() {
-        // Issue 3: named_number and named_bit do not pop the Reference from str_stack,
-        // causing stack pollution that corrupts downstream parsing.
-        // Note: NamedNumber is used for INTEGER, not ENUMERATED (which uses EnumItem).
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    MyInt ::= INTEGER { foo( Bar ), baz( 2 ) }
-    NextType ::= BOOLEAN
-END;
-"#;
-        let ast = parse_source(source);
-        
-        // Verify NextType was parsed correctly (would fail if stack is polluted)
-        let next_assignment = ast
-            .body
-            .assignments
-            .iter()
-            .find(|a| {
-                if let Assignment::Type(ta) = a {
-                    ta.name == "NextType"
-                } else {
-                    false
-                }
-            })
-            .expect("NextType should be parsed correctly without stack pollution");
-
-        match next_assignment {
-            Assignment::Type(ta) => {
-                assert_eq!(ta.name, "NextType");
-                match &ta.ty {
-                    AsnType::Boolean { .. } => {}
-                    other => panic!("expected Boolean, got {:?}", other),
-                }
-            }
-            _ => unreachable!(),
+    fn test_parser_vector_named_numbers() {
+        // Verifies that named_number properly pops the Reference from str_stack,
+        // preventing stack pollution that would corrupt downstream parsing.
+        let source = load_vector("03_named_numbers.asn1");
+        // If stack pollution occurs, parsing NextType will fail or be corrupted
+        let next_ty = parse_type(&source, "NextType");
+        match next_ty {
+            AsnType::Boolean { .. } => {}
+            other => panic!("expected Boolean, got {:?}", other),
         }
     }
 }

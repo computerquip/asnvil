@@ -1,0 +1,4 @@
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyOctetValid OCTET STRING ::= 'DEADBEEF'H
+    MyOctetOdd OCTET STRING ::= 'ABC'H
+END;
