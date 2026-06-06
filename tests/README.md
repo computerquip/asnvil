@@ -20,10 +20,10 @@ tests/
     ├── runtime_tests/                 # Pure runtime unit tests (no .asn1 compilation needed)
     │   └── test_runtime.py            
     ├── <feature_name>/                # Example: x509_subset, explicit_choice, ber_primitives
-    │   ├── schema.asn1                # The ASN.1 schema (optional for pure runtime tests)
+    │   ├── *.asn1                     # One or more ASN.1 schemas (e.g., schema.asn1, imports.asn1)
     │   ├── test_*.py                  # Python test script(s) for this feature
     │   ├── test_*.rs                  # (Future) Rust test script(s) for this feature
-    │   └── payloads.yaml              # (Optional) Hex/JSON test vectors for this feature
+    │   └── *.yaml                     # (Optional) Hex/JSON test vectors for this feature
 ```
 
 ---
@@ -85,10 +85,11 @@ Because it relies on file extensions, **you never have to update a central list*
 5. Run `just test-rust` to verify.
 
 ### Scenario C: Adding an End-to-End Integration Test
-*Use this to test the full pipeline: ASN.1 Schema → Python Code Generation → BER/DER Roundtrip.*
+*Use this to test the full pipeline: ASN.1 Schema(s) → Python Code Generation → BER/DER Roundtrip.*
 
 1. Create a new folder: `tests/vectors/my_integration_feature/`
-2. Add your schema: `tests/vectors/my_integration_feature/schema.asn1`
+2. Add your schema(s): `tests/vectors/my_integration_feature/schema.asn1`
+   *(Note: You can add **multiple** `.asn1` files here, such as `imports.asn1`. The runner will automatically discover and compile all of them together).*
    *(Ensure the `MODULE IDENTIFIER` inside the file matches what you will import in Python).*
 3. Add your test script: `tests/vectors/my_integration_feature/test_roundtrip.py`
    ```python
