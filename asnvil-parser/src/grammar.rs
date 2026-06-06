@@ -830,9 +830,9 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
     }
 
     fn referenced_type(&mut self, arg: &ReferencedType<'t>) -> Result<()> {
-        let parameters = if arg.referenced_type_opt.is_some() {
+        let parameters = if let Some(opt) = &arg.referenced_type_opt {
             let mut params = Vec::new();
-            let al = &arg.referenced_type_opt.as_ref().unwrap().actual_parameter_list;
+            let al = &opt.actual_parameter_list;
             let count = 1 + al.actual_parameter_list_list.len();
             for _ in 0..count {
                 params.push(self.actual_param_stack.try_pop()?);
@@ -853,12 +853,15 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn named_number(&mut self, arg: &NamedNumber<'t>) -> Result<()> {
         let name = self.str_stack.try_pop()?;
-        let value = match &*arg.named_number_group {
-            NamedNumberGroup::NumberLiteral(inner) => {
+        let value = match &*arg.named_number_value {
+            NamedNumberValue::NumberLiteral(inner) => {
                 let text = inner.number_literal.number_literal.text();
                 text.parse().map_err(|e| anyhow::anyhow!("Invalid number: {text}: {e}"))?
             }
-            NamedNumberGroup::Reference(_) => BigInt::from(0),
+            NamedNumberValue::Reference(_) => {
+                let _ref_name = self.str_stack.try_pop()?;
+                BigInt::from(0)
+            }
         };
         self.named_number_stack.push(ast::NamedNumber { name, value });
         Ok(())
@@ -866,12 +869,15 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn named_bit(&mut self, arg: &NamedBit<'t>) -> Result<()> {
         let name = self.str_stack.try_pop()?;
-        let value = match &*arg.named_bit_group {
-            NamedBitGroup::NumberLiteral(inner) => {
+        let value = match &*arg.named_bit_value {
+            NamedBitValue::NumberLiteral(inner) => {
                 let text = inner.number_literal.number_literal.text();
                 text.parse().map_err(|e| anyhow::anyhow!("Invalid number: {text}: {e}"))?
             }
-            NamedBitGroup::Reference(_) => BigInt::from(0),
+            NamedBitValue::Reference(_) => {
+                let _ref_name = self.str_stack.try_pop()?;
+                BigInt::from(0)
+            }
         };
         self.named_bit_stack.push(ast::NamedBit { name, value });
         Ok(())
@@ -950,11 +956,19 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn value_item(&mut self, arg: &ValueItem<'t>) -> Result<()> {
         let named = match arg {
-            ValueItem::Identifier(_inner) => {
+            ValueItem::IdentifierValueItemSuffix(inner) => {
                 let name = self.str_stack.try_pop()?;
-                ast::NamedValue {
-                    name: String::new(),
-                    value: ast::AsnValue::Referenced(name),
+                match &*inner.value_item_suffix {
+                    ValueItemSuffix::ColonValue(_colon_val) => {
+                        let val = self.value_stack.try_pop()?;
+                        ast::NamedValue { name, value: val }
+                    }
+                    ValueItemSuffix::ValueItemSuffixEmpty(_) => {
+                        ast::NamedValue {
+                            name: String::new(),
+                            value: ast::AsnValue::Referenced(name),
+                        }
+                    }
                 }
             }
             ValueItem::NumberLiteral(inner) => {
@@ -965,10 +979,20 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
                     value: ast::AsnValue::Integer(num),
                 }
             }
-            ValueItem::ReferenceColonValue(_inner) => {
+            ValueItem::ReferenceValueItemSuffix0(inner) => {
                 let name = self.str_stack.try_pop()?;
-                let val = self.value_stack.try_pop()?;
-                ast::NamedValue { name, value: val }
+                match &*inner.value_item_suffix0 {
+                    ValueItemSuffix0::ColonValue(_colon_val) => {
+                        let val = self.value_stack.try_pop()?;
+                        ast::NamedValue { name, value: val }
+                    }
+                    ValueItemSuffix0::ValueItemSuffix0Empty(_) => {
+                        ast::NamedValue {
+                            name: String::new(),
+                            value: ast::AsnValue::Referenced(name),
+                        }
+                    }
+                }
             }
         };
         self.named_value_stack.push(named);

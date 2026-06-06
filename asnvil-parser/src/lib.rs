@@ -321,4 +321,127 @@ END;
             other => panic!("expected Symbols variant, got {:?}", other),
         }
     }
+
+    #[test]
+    fn test_value_item_lowercase_identifier_with_colon() {
+        // Issue 1: ValueItem grammar does not support lowercase Identifier followed by ':' Value.
+        // It only supports Reference ':' Value. This causes parse errors for { foo: 1 }.
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyType ::= SEQUENCE {
+        foo INTEGER
+    }
+    MyValue MyType ::= { foo: 1 }
+END;
+"#;
+        let ast = parse_source(source);
+        let assignment = ast
+            .body
+            .assignments
+            .iter()
+            .find(|a| {
+                if let Assignment::Value(va) = a {
+                    va.name == "MyValue"
+                } else {
+                    false
+                }
+            })
+            .expect("should have MyValue assignment");
+
+        let value = match assignment {
+            Assignment::Value(va) => &va.value,
+            _ => unreachable!(),
+        };
+
+        match value {
+            AsnValue::Sequence(items) => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].name, "foo");
+                match &items[0].value {
+                    AsnValue::Integer(n) => assert_eq!(n.to_string(), "1"),
+                    other => panic!("expected Integer, got {:?}", other),
+                }
+            }
+            other => panic!("expected Sequence, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_referenced_type_with_parameters() {
+        // Issue 2: referenced_type uses .unwrap() on optional access.
+        // This test exercises the code path to ensure it works without unwraps.
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyParamType ::= SEQUENCE { a INTEGER }
+    MyRef ::= MyParamType { INTEGER }
+END;
+"#;
+        let ast = parse_source(source);
+        let assignment = ast
+            .body
+            .assignments
+            .iter()
+            .find(|a| {
+                if let Assignment::Type(ta) = a {
+                    ta.name == "MyRef"
+                } else {
+                    false
+                }
+            })
+            .expect("should have MyRef assignment");
+
+        let ty = match assignment {
+            Assignment::Type(ta) => &ta.ty,
+            _ => unreachable!(),
+        };
+
+        match ty {
+            AsnType::Referenced { name, parameters, .. } => {
+                assert_eq!(name, "MyParamType");
+                assert!(parameters.is_some());
+                let params = parameters.as_ref().unwrap();
+                assert_eq!(params.len(), 1);
+            }
+            other => panic!("expected Referenced, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_named_number_with_reference() {
+        // Issue 3: named_number and named_bit do not pop the Reference from str_stack,
+        // causing stack pollution that corrupts downstream parsing.
+        // Note: NamedNumber is used for INTEGER, not ENUMERATED (which uses EnumItem).
+        let source = r#"
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    MyInt ::= INTEGER { foo( Bar ), baz( 2 ) }
+    NextType ::= BOOLEAN
+END;
+"#;
+        let ast = parse_source(source);
+        
+        // Verify NextType was parsed correctly (would fail if stack is polluted)
+        let next_assignment = ast
+            .body
+            .assignments
+            .iter()
+            .find(|a| {
+                if let Assignment::Type(ta) = a {
+                    ta.name == "NextType"
+                } else {
+                    false
+                }
+            })
+            .expect("NextType should be parsed correctly without stack pollution");
+
+        match next_assignment {
+            Assignment::Type(ta) => {
+                assert_eq!(ta.name, "NextType");
+                match &ta.ty {
+                    AsnType::Boolean { .. } => {}
+                    other => panic!("expected Boolean, got {:?}", other),
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
 }

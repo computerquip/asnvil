@@ -114,10 +114,12 @@ ActualParameterList: '{' ActualParameter {','^ ActualParameter} '}';
 ActualParameter: Type;
 
 NamedNumberList: '{'^ NamedNumber {','^ NamedNumber} ['...'] '}';
-NamedNumber: Identifier '(' (NumberLiteral | Reference) ')';
+NamedNumber: Identifier '(' NamedNumberValue ')';
+NamedNumberValue: NumberLiteral | Reference;
 
 NamedBitList: '{'^ NamedBit {','^ NamedBit} ['...'] '}';
-NamedBit: Identifier '(' (NumberLiteral | Reference) ')';
+NamedBit: Identifier '(' NamedBitValue ')';
+NamedBitValue: NumberLiteral | Reference;
 
 RootEnumeration: EnumItem {','^ EnumItem};
 EnumItem: Identifier ['(' NumberLiteral ')'];
@@ -150,7 +152,7 @@ Value:
     Reference;
 
 ValueItems: ValueItem {','^ ValueItem};
-ValueItem: Identifier | NumberLiteral | Reference ':' Value;
+ValueItem: Identifier ':'^ Value | Reference ':'^ Value | NumberLiteral | Reference | Identifier;
 
 IdentifierOrKeyword:
     Reference |
