@@ -1,8 +1,7 @@
 -- =========================================================================
 -- asnvil Test Vector: 1002_named_numbers.asn1
 -- Description: INTEGER named numbers with identifier references
--- Attribution: Adapted from vlm/asn1c project (MIT license)
---              https://github.com/vlm/asn1c
+-- Attribution: Original asnvil test vector
 -- =========================================================================
 
 TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN

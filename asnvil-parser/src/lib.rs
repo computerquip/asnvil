@@ -73,17 +73,16 @@ mod tests {
     }
 
     #[test]
-    fn test_value_sequence_in_default() {
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    Status ::= BOOLEAN
-    Thing ::= SEQUENCE {
-        active Status DEFAULT TRUE
-    }
-END;
-"#;
-        let ty = parse_type(source, "Thing");
-        match ty {
+    fn test_vector_1007_value_sequences() {
+        // Tests sequence values with DEFAULT clauses and value collection.
+        // Also verifies downstream types parse correctly (would fail if stack polluted).
+        let source = load_vector("1007_value_sequences.asn1");
+        
+        let _status_ty = parse_type(&source, "Status");
+        let _next_ty = parse_type(&source, "NextType");
+
+        let thing_ty = parse_type(&source, "Thing");
+        match thing_ty {
             AsnType::Sequence { fields, .. } => {
                 let active_field = fields.iter().find(|f| f.name == "active")
                     .expect("should have active field");
@@ -91,28 +90,8 @@ END;
             }
             other => panic!("expected Sequence, got {:?}", other),
         }
-    }
 
-    #[test]
-    fn test_value_sequence_collects_items() {
-        // Tests that { ValueItems } actually collects values from the value_stack.
-        // The bug: LBraceValueItemsRBrace creates Vec::new() instead of
-        // popping values pushed by value_item callbacks.
-        // Using a standalone type that comes AFTER the one with the DEFAULT
-        // to detect whether the value_stack pollution breaks downstream parsing.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    Colors ::= ENUMERATED { red(0), green(1), blue(2) }
-    Shape ::= SEQUENCE {
-        color Colors DEFAULT { red }
-    }
-    Status ::= BOOLEAN
-END;
-"#;
-        // Verify downstream types parse correctly (would fail if stack polluted)
-        let _status_ty = parse_type(source, "Status");
-        
-        let shape_ty = parse_type(source, "Shape");
+        let shape_ty = parse_type(&source, "Shape");
         match shape_ty {
             AsnType::Sequence { fields, .. } => {
                 let color_field = fields.iter().find(|f| f.name == "color")
@@ -187,34 +166,17 @@ END;
     }
 
     #[test]
-    fn test_import_reference_type_name() {
-        // R41: Import symbols must accept Reference (uppercase type names like Person).
-        // Before: only Identifier (lowercase) and keywords were accepted.
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    IMPORTS Person, X509Certificate FROM OtherModule;
-    MyType ::= BOOLEAN
-END;
-"#;
-        let ast = parse_source(source);
+    fn test_vector_1006_reference_imports_exports() {
+        // R41: Import and export symbols must accept Reference (uppercase type names).
+        let source = load_vector("1006_reference_imports_exports.asn1");
+        let ast = parse_source(&source);
+        
         assert!(!ast.body.imports.is_empty(), "should have IMPORTS");
         let import = &ast.body.imports[0];
         assert_eq!(import.symbols.len(), 2);
         assert_eq!(import.symbols, &["Person", "X509Certificate"]);
         assert_eq!(import.module, "OtherModule");
-    }
 
-    #[test]
-    fn test_export_reference_type_name() {
-        // R41: Export symbols must accept Reference (uppercase type names).
-        let source = r#"
-TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    EXPORTS Person, Certificate;
-    Person ::= SEQUENCE { name IA5String }
-    Certificate ::= OCTET STRING
-END;
-"#;
-        let ast = parse_source(source);
         let exports = ast.body.exports.as_ref().expect("should have EXPORTS");
         match &exports.symbols {
             ExportSymbols::Symbols(symbols) => {

@@ -1,0 +1,20 @@
+-- =========================================================================
+-- asnvil Test Vector: 1007_value_sequences.asn1
+-- Description: Sequence values with DEFAULT clauses and value collection.
+-- Attribution: Original asnvil test vector
+-- =========================================================================
+
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    Status ::= BOOLEAN
+    Colors ::= ENUMERATED { red(0), green(1), blue(2) }
+    
+    Thing ::= SEQUENCE {
+        active Status DEFAULT TRUE
+    }
+    
+    Shape ::= SEQUENCE {
+        color Colors DEFAULT { red }
+    }
+    
+    NextType ::= BOOLEAN
+END;

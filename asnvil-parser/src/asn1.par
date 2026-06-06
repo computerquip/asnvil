@@ -152,7 +152,8 @@ Value:
     Reference;
 
 ValueItems: ValueItem {','^ ValueItem};
-ValueItem: Identifier ':'^ Value | Reference ':'^ Value | NumberLiteral | Reference | Identifier;
+ValueItem: Identifier ValueItemSuffix | Reference ValueItemSuffix | NumberLiteral;
+ValueItemSuffix: ':'^ Value | ;
 
 IdentifierOrKeyword:
     Reference |

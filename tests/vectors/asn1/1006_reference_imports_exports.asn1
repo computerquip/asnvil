@@ -1,0 +1,13 @@
+-- =========================================================================
+-- asnvil Test Vector: 1006_reference_imports_exports.asn1
+-- Description: Module imports and exports using uppercase Reference type names.
+-- Attribution: Original asnvil test vector
+-- =========================================================================
+
+TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    EXPORTS Person, Certificate;
+    IMPORTS Person, X509Certificate FROM OtherModule;
+    
+    Person ::= SEQUENCE { name IA5String }
+    Certificate ::= OCTET STRING
+END;

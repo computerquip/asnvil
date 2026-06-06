@@ -955,14 +955,14 @@ impl<'t> GrammarTrait<'t> for Grammar<'t> {
 
     fn value_item(&mut self, arg: &ValueItem<'t>) -> Result<()> {
         let named = match arg {
-            ValueItem::IdentifierValueItemSuffix0(inner) => {
+            ValueItem::IdentifierValueItemSuffix(inner) => {
                 let name = self.str_stack.try_pop()?;
-                match &*inner.value_item_suffix0 {
-                    ValueItemSuffix0::ColonValue(_colon_val) => {
+                match &*inner.value_item_suffix {
+                    ValueItemSuffix::ColonValue(_colon_val) => {
                         let val = self.value_stack.try_pop()?;
                         ast::NamedValue { name, value: val }
                     }
-                    ValueItemSuffix0::ValueItemSuffix0Empty(_) => {
+                    ValueItemSuffix::ValueItemSuffixEmpty(_) => {
                         ast::NamedValue {
                             name: String::new(),
                             value: ast::AsnValue::Referenced(name),

@@ -1,8 +1,7 @@
 -- =========================================================================
 -- asnvil Test Vector: 1004_hex_strings.asn1
 -- Description: Valid and odd-length hex string literals
--- Attribution: Adapted from vlm/asn1c project (MIT license)
---              https://github.com/vlm/asn1c
+-- Attribution: Original asnvil test vector
 -- =========================================================================
 
 TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN

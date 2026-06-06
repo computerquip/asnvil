@@ -1,8 +1,7 @@
 -- =========================================================================
 -- asnvil Test Vector: 1001_value_items.asn1
 -- Description: Sequence values with lowercase identifier keys
--- Attribution: Adapted from vlm/asn1c project (MIT license)
---              https://github.com/vlm/asn1c
+-- Attribution: Original asnvil test vector
 -- =========================================================================
 
 TestModule DEFINITIONS AUTOMATIC TAGS ::= BEGIN
