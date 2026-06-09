@@ -1246,7 +1246,12 @@ impl PythonRenderer {
                     Some(b) if !b.constraints.is_empty() => b,
                     _ => continue,
                 };
+                let is_optional = f.optional || f.default.is_some();
+                if is_optional {
+                    out.push_str(&format!("        if self.{} is not None:\n", f.name));
+                }
                 for cv in &ber.constraints {
+                    let indent = if is_optional { "            " } else { "        " };
                     match &cv.kind {
                         crate::code_ast::ConstraintKind::IntegerRange { min, max } => {
                             let cond = match (min, max) {
@@ -1261,8 +1266,8 @@ impl PythonRenderer {
                                 (None, Some(mx)) => format!("\"{} {{}} exceeds maximum {}\"", f.name, mx),
                                 (None, None) => continue,
                             };
-                            out.push_str(&format!("        if {}:\n", cond));
-                            out.push_str(&format!("            raise ConstraintViolationError({}.format(self.{}))\n", msg, f.name));
+                            out.push_str(&format!("{}if {}:\n", indent, cond));
+                            out.push_str(&format!("{}    raise ConstraintViolationError({}.format(self.{}))\n", indent, msg, f.name));
                         }
                         crate::code_ast::ConstraintKind::SizeRange { min, max } => {
                             let cond = match (min, max) {
@@ -1277,13 +1282,13 @@ impl PythonRenderer {
                                 (None, Some(mx)) => format!("\"{} length {{}} exceeds maximum {}\"", f.name, mx),
                                 (None, None) => continue,
                             };
-                            out.push_str(&format!("        if {}:\n", cond));
-                            out.push_str(&format!("            raise ConstraintViolationError({}.format(len(self.{})))\n", msg, f.name));
+                            out.push_str(&format!("{}if {}:\n", indent, cond));
+                            out.push_str(&format!("{}    raise ConstraintViolationError({}.format(len(self.{})))\n", indent, msg, f.name));
                         }
                         crate::code_ast::ConstraintKind::SingleValue { value } => {
                             let val = Self::value_literal_to_python(value);
-                            out.push_str(&format!("        if self.{} != {}:\n", f.name, val));
-                            out.push_str(&format!("            raise ConstraintViolationError(\"{} must be {}\")\n", f.name, val));
+                            out.push_str(&format!("{}if self.{} != {}:\n", indent, f.name, val));
+                            out.push_str(&format!("{}    raise ConstraintViolationError(\"{} must be {}\")\n", indent, f.name, val));
                         }
                     }
                 }

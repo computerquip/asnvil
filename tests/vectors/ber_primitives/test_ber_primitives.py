@@ -29,7 +29,7 @@ def test_ber_tag_decoding(vector):
     expected_class_map = {
         "universal": TagClass.UNIVERSAL,
         "application": TagClass.APPLICATION,
-        "context": TagClass.CONTEXT_SPECIFIC,
+        "context": TagClass.CONTEXT,
         "private": TagClass.PRIVATE,
     }
     
