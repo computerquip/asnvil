@@ -4,6 +4,8 @@ members = [
     "asnvil-parser",
     "asnvil-ir",
     "asnvil-codegen",
+    "asnvil-runtime-rust",
+    "tests/rust_integration",
 ]
 resolver = "2"
 

@@ -2,6 +2,7 @@ pub mod code_ast;
 pub mod builder;
 pub mod renderer;
 pub mod python;
+pub mod rust;
 
 #[cfg(test)]
 mod tests {

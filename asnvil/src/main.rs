@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use asnvil_codegen::builder::CodeAstBuilder;
 use asnvil_codegen::python::PythonRenderer;
+use asnvil_codegen::rust::RustRenderer;
 use asnvil_codegen::renderer::LanguageRenderer;
 use asnvil_ir::from_ast;
 use asnvil_ir::resolver::Resolver;
@@ -109,6 +110,7 @@ fn main() -> Result<()> {
 
         let renderer = match cli.lang.as_str() {
             "python" => Box::new(PythonRenderer::new()) as Box<dyn LanguageRenderer>,
+            "rust" => Box::new(RustRenderer::new()) as Box<dyn LanguageRenderer>,
             other => {
                 bail!("Unsupported target language: {}", other);
             }
@@ -117,7 +119,8 @@ fn main() -> Result<()> {
         let output = renderer.render_module(&code_ast)
             .map_err(|e| anyhow::anyhow!("Failed to render module: {}", e))?;
 
-        let output_path = out_dir.join(format!("{}.py", name));
+        let ext = if cli.lang == "rust" { "rs" } else { "py" };
+        let output_path = out_dir.join(format!("{}.{}", name, ext));
         fs::create_dir_all(&out_dir)?;
         fs::write(&output_path, output)?;
 
