@@ -3,6 +3,30 @@ use crate::renderer::LanguageRenderer;
 use anyhow::{bail, Result};
 use askama::Template;
 
+pub mod filters {
+    pub fn escape_rust_keyword(name: &str) -> ::askama::Result<String> {
+        Ok(match name {
+            "type" | "fn" | "mod" | "let" | "mut" | "pub" | "struct" | "enum" | "impl" | "trait" | "use" | "as" | "match" | "if" | "else" | "for" | "while" | "loop" | "return" | "break" | "continue" | "in" => {
+                format!("r#{}", name)
+            }
+            _ => name.to_string(),
+        })
+    }
+}
+
+fn escape_rust_keyword_str(name: &str) -> String {
+    match name {
+        "type" | "fn" | "mod" | "let" | "mut" | "pub" | "struct" | "enum" | "impl" | "trait" | "use" | "as" | "match" | "if" | "else" | "for" | "while" | "loop" | "return" | "break" | "continue" | "in" => {
+            format!("r#{}", name)
+        }
+        _ => name.to_string(),
+    }
+}
+
+fn escape_rust_field_accessor(value: &str, field_name: &str) -> String {
+    value.replace(&format!("self.{}", field_name), &format!("self.{}", escape_rust_keyword_str(field_name)))
+}
+
 macro_rules! rust_tpl {
     ($name:ident, $path:expr, $($field:ident: $ty:ty),+ $(,)?) => {
         #[derive(Template)]
@@ -37,7 +61,12 @@ rust_tpl!(DecodeAny, "rust/decode_any.txt", indent: &'a str, decoder_var: &'a st
 rust_tpl!(DecodeReferenced, "rust/decode_referenced.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, inner_type: &'a str, decode_method: &'a str);
 
 fn render_tpl<T: Template>(t: T) -> String {
-    t.render().expect("template render failed")
+    let mut rendered = t.render().expect("template render failed");
+    // Escape Rust keywords that might appear as field names (e.g., "self.type" -> "self.r#type")
+    rendered = rendered.replace("self.type", "self.r#type");
+    rendered = rendered.replace(" type:", " r#type:");
+    rendered = rendered.replace(" type =", " r#type =");
+    rendered
 }
 
 pub struct RustRenderer;
@@ -88,19 +117,20 @@ impl RustRenderer {
         let tag_class_to_rust = |class: &str| self.tag_class_to_rust(class);
         
         match stmt {
-            EncodeStmt::WriteInteger { value, tag, .. } => {
+            EncodeStmt::WriteInteger { name, value, tag, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeInteger {
                     indent,
                     encoder_type: &encoder_type,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                     tag_class: &tag_class_to_rust(&tag.class),
                     tag_number: tag.number,
                 }))
             }
-            EncodeStmt::WriteBoolean { value, tag, .. } => {
+            EncodeStmt::WriteBoolean { name, value, tag, .. } => {
                 let val_expr = if value.starts_with("self.") {
-                    format!("{}.unwrap_or(false)", value)
+                    format!("{}.unwrap_or(false)", escape_rust_field_accessor(value, name))
                 } else if value.starts_with("val") {
                     format!("*{}", value)
                 } else {
@@ -115,40 +145,44 @@ impl RustRenderer {
                     tag_number: tag.number,
                 }))
             }
-            EncodeStmt::WriteString { value, tag, .. } => {
+            EncodeStmt::WriteString { name, value, tag, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeString {
                     indent,
                     encoder_type: &encoder_type,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                     tag_class: &tag_class_to_rust(&tag.class),
                     tag_number: tag.number,
                 }))
             }
-            EncodeStmt::WriteBytes { value, tag, .. } => {
+            EncodeStmt::WriteBytes { name, value, tag, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeBytes {
                     indent,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                     tag_class: &tag_class_to_rust(&tag.class),
                     tag_number: tag.number,
                 }))
             }
-            EncodeStmt::WriteBitString { value, tag, .. } => {
+            EncodeStmt::WriteBitString { name, value, tag, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeBitString {
                     indent,
                     encoder_type: &encoder_type,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                     tag_class: &tag_class_to_rust(&tag.class),
                     tag_number: tag.number,
                 }))
             }
-            EncodeStmt::WriteOid { value, tag, .. } => {
+            EncodeStmt::WriteOid { name, value, tag, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeOid {
                     indent,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                     tag_class: &tag_class_to_rust(&tag.class),
                     tag_number: tag.number,
                 }))
@@ -161,26 +195,28 @@ impl RustRenderer {
                     tag_number: tag.number,
                 }))
             }
-            EncodeStmt::WriteAny { value, .. } => {
+            EncodeStmt::WriteAny { name, value, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeAny {
                     indent,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                 }))
             }
-            EncodeStmt::WriteReferenced { encode_method, value, .. } |
-            EncodeStmt::WriteChoice { encode_method, value, .. } => {
+            EncodeStmt::WriteReferenced { name, encode_method, value, .. } |
+            EncodeStmt::WriteChoice { name, encode_method, value, .. } => {
+                let escaped_value = escape_rust_field_accessor(value, name);
                 Ok(render_tpl(EncodeReferenced {
                     indent,
                     encoder_var,
-                    value,
+                    value: &escaped_value,
                     encode_method,
                 }))
             }
             EncodeStmt::WriteList { tag, value, element_info, .. } => {
                 let element_encode = match element_info.encoding.as_str() {
                     "constructed" | "referenced" | "choice" | "list" => {
-                        format!("{indent}    let _encoded = _li.encode_{}()?", prefix.to_lowercase())
+                        format!("{indent}    let _encoded = _li.encode_{}()?;", prefix.to_lowercase())
                     }
                     "integer" => format!(
                         "{indent}    let mut _e = asnvil_runtime_rust::{encoder_type}::new();\n\
@@ -388,7 +424,8 @@ impl LanguageRenderer for RustRenderer {
                         output.push_str(&format!("    /// {}\n", doc));
                     }
                     let ty = self.render_type_internal(&field.ty)?;
-                    output.push_str(&format!("    pub {}: {},\n", field.name, ty));
+                    let field_name = escape_rust_keyword_str(&field.name);
+                    output.push_str(&format!("    pub {}: {},\n", field_name, ty));
                 }
                 output.push_str("}\n\n");
 
