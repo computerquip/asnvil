@@ -1,0 +1,7 @@
+{{ indent }}let _tag = {{ decoder_var }}.read_tag()?;
+{{ indent }}if _tag.0 != asnvil_runtime_rust::TagClass::{{ tag_class }} || _tag.1 != {{ tag_number }} {
+{{ indent }}    return Err(AsnError::UnexpectedTag { expected: Tag { tag_class: asnvil_runtime_rust::TagClass::{{ tag_class }}, number: {{ tag_number }}, constructed: false }, actual: Tag { tag_class: _tag.0, number: _tag.1, constructed: _tag.2 } });
+{{ indent }}}
+{{ indent }}let _len = {{ decoder_var }}.read_length()?;
+{{ indent }}let _bs_data = {{ decoder_var }}.read_bytes(_len)?;
+{{ indent }}{{ name }} = Some(asnvil_runtime_rust::BitString::new(_bs_data[1..].to_vec(), _bs_data[0])?);

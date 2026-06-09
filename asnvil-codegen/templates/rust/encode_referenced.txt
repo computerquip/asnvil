@@ -1,0 +1,2 @@
+{{ indent }}let _encoded = {{ value }}.{{ encode_method }}()?;
+{{ indent }}{{ encoder_var }}.write_bytes(&_encoded);

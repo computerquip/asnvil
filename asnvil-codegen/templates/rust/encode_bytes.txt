@@ -1,0 +1,3 @@
+{{ indent }}{{ encoder_var }}.write_tag(asnvil_runtime_rust::TagClass::{{ tag_class }}, {{ tag_number }}, false)?;
+{{ indent }}{{ encoder_var }}.write_length({{ value }}.len())?;
+{{ indent }}{{ encoder_var }}.write_bytes(&{{ value }});

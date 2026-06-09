@@ -19,13 +19,14 @@ VECTORS_DIR = TESTS_DIR / "vectors"
 RUNTIME_SRC = REPO_ROOT / "asnvil-runtime-python"
 
 
-def compile_asn1_files(asn1_files: list[Path], output_dir: Path) -> None:
+def compile_asn1_files(asn1_files: list[Path], output_dir: Path, lang: str = "python") -> None:
     """Run `cargo run` to compile all provided .asn1 files into the output directory."""
     for asn1_path in asn1_files:
         result = subprocess.run(
             [
                 "cargo", "run", "--quiet", "--",
                 "-o", str(output_dir),
+                "--lang", lang,
                 str(asn1_path),
             ],
             cwd=REPO_ROOT,
@@ -66,6 +67,42 @@ def run_python_tests(test_files: list[Path], output_dir: Path) -> bool:
     if result.stderr:
         print(result.stderr, file=sys.stderr)
     return result.returncode == 0
+
+
+def run_rust_tests(test_files: list[Path], output_dir: Path) -> bool:
+    """Run rust-script on the provided .rs test files with generated code available."""
+    all_passed = True
+    for test_file in test_files:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_test_file = Path(tmpdir) / test_file.name
+            
+            # Read the test file and substitute __REPO_ROOT__ with the actual absolute path
+            content = test_file.read_text()
+            content = content.replace("__REPO_ROOT__", str(REPO_ROOT))
+            tmp_test_file.write_text(content)
+            
+            # Copy all generated .rs files to the temp dir so they can be included via #[path]
+            for rs_file in output_dir.glob("*.rs"):
+                shutil.copy(rs_file, Path(tmpdir) / rs_file.name)
+            
+            env = os.environ.copy()
+            env["INTEG_OUTPUT_DIR"] = str(output_dir)
+            result = subprocess.run(
+                ["rust-script", str(tmp_test_file)],
+                cwd=REPO_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            print(result.stdout)
+            if result.stderr:
+                print(result.stderr, file=sys.stderr)
+            if result.returncode != 0:
+                all_passed = False
+                print(f"FAIL: rust-script execution failed for {test_file.name}")
+            else:
+                print(f"PASS: {test_file.name}")
+    return all_passed
 
 
 def discover_suites() -> list[dict]:
@@ -114,19 +151,21 @@ def main() -> None:
             output_dir.mkdir()
 
             try:
-                # Only compile if there are .asn1 files
-                if suite["asn1_files"]:
-                    compile_asn1_files(suite["asn1_files"], output_dir)
-                
-                # Copy runtime if there are Python tests (needed for 'import asnvil_runtime')
-                if suite["py_test_files"]:
-                    copy_runtime(output_dir)
-                
                 ok = True
-                if suite["py_test_files"]:
-                    ok = run_python_tests(suite["py_test_files"], output_dir)
                 
-                # Future: if suite["rs_test_files"]: ok = run_rust_tests(...) and ok
+                # Compile for Python if there are Python tests
+                if suite["asn1_files"] and suite["py_test_files"]:
+                    compile_asn1_files(suite["asn1_files"], output_dir, lang="python")
+                    copy_runtime(output_dir)
+                    ok = run_python_tests(suite["py_test_files"], output_dir) and ok
+                
+                # Compile for Rust if there are Rust tests
+                if suite["asn1_files"] and suite["rs_test_files"]:
+                    # Use a separate output dir for Rust to avoid mixing .py and .rs
+                    rust_output_dir = output_dir / "rust"
+                    rust_output_dir.mkdir()
+                    compile_asn1_files(suite["asn1_files"], rust_output_dir, lang="rust")
+                    ok = run_rust_tests(suite["rs_test_files"], rust_output_dir) and ok
 
                 if not ok:
                     failures += 1

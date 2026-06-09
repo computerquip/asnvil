@@ -1,0 +1,4 @@
+{{ indent }}let _encoded_oid = {{ value }}.encode()?;
+{{ indent }}{{ encoder_var }}.write_tag(asnvil_runtime_rust::TagClass::{{ tag_class }}, {{ tag_number }}, false)?;
+{{ indent }}{{ encoder_var }}.write_length(_encoded_oid.len())?;
+{{ indent }}{{ encoder_var }}.write_bytes(&_encoded_oid);

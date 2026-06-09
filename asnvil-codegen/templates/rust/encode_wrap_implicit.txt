@@ -1,0 +1,6 @@
+{{ indent }}let mut _inner_encoder = asnvil_runtime_rust::{{ encoder_type }}::new();
+{{ inner_code }}
+{{ indent }}let _inner_bytes = _inner_encoder.finish();
+{{ indent }}{{ encoder_var }}.write_tag(asnvil_runtime_rust::TagClass::{{ outer_tag_class }}, {{ outer_tag_number }}, false)?;
+{{ indent }}{{ encoder_var }}.write_length(_inner_bytes.len())?;
+{{ indent }}{{ encoder_var }}.write_bytes(&_inner_bytes);

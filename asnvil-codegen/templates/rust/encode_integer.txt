@@ -1,0 +1,6 @@
+{{ indent }}let mut _e = asnvil_runtime_rust::{{ encoder_type }}::new();
+{{ indent }}_e.write_integer(&{{ value }})?;
+{{ indent }}let _encoded = _e.finish();
+{{ indent }}{{ encoder_var }}.write_tag(asnvil_runtime_rust::TagClass::{{ tag_class }}, {{ tag_number }}, false)?;
+{{ indent }}{{ encoder_var }}.write_length(_encoded.len())?;
+{{ indent }}{{ encoder_var }}.write_bytes(&_encoded);

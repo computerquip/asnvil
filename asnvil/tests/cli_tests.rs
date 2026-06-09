@@ -99,7 +99,7 @@ fn test_cli_unsupported_language() {
     fs::write(&input, make_test_asn1()).unwrap();
 
     let mut cmd = Command::cargo_bin("asnvil").unwrap();
-    cmd.arg(&input).arg("-o").arg(temp.path()).arg("--lang").arg("rust");
+    cmd.arg(&input).arg("-o").arg(temp.path()).arg("--lang").arg("c++");
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("Unsupported target language"));

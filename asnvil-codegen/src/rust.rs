@@ -1,6 +1,44 @@
 use crate::code_ast::*;
 use crate::renderer::LanguageRenderer;
 use anyhow::{bail, Result};
+use askama::Template;
+
+macro_rules! rust_tpl {
+    ($name:ident, $path:expr, $($field:ident: $ty:ty),+ $(,)?) => {
+        #[derive(Template)]
+        #[template(path = $path, escape = "none")]
+        struct $name<'a> {
+            $($field: $ty),+
+        }
+    };
+}
+
+rust_tpl!(EncodeInteger, "rust/encode_integer.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeBoolean, "rust/encode_boolean.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeString, "rust/encode_string.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeBytes, "rust/encode_bytes.txt", indent: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeBitString, "rust/encode_bit_string.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeOid, "rust/encode_oid.txt", indent: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeNull, "rust/encode_null.txt", indent: &'a str, encoder_var: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(EncodeAny, "rust/encode_any.txt", indent: &'a str, encoder_var: &'a str, value: &'a str);
+rust_tpl!(EncodeReferenced, "rust/encode_referenced.txt", indent: &'a str, encoder_var: &'a str, value: &'a str, encode_method: &'a str);
+rust_tpl!(EncodeList, "rust/encode_list.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, value: &'a str, tag_class: &'a str, tag_number: u32, element_encode: String);
+rust_tpl!(EncodeWrapExplicit, "rust/encode_wrap_explicit.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, outer_tag_class: &'a str, outer_tag_number: u32, inner_code: String);
+rust_tpl!(EncodeWrapImplicit, "rust/encode_wrap_implicit.txt", indent: &'a str, encoder_type: &'a str, encoder_var: &'a str, outer_tag_class: &'a str, outer_tag_number: u32, inner_code: String);
+
+rust_tpl!(DecodeInteger, "rust/decode_integer.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeBoolean, "rust/decode_boolean.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeString, "rust/decode_string.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeBytes, "rust/decode_bytes.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeBitString, "rust/decode_bit_string.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeOid, "rust/decode_oid.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeNull, "rust/decode_null.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32);
+rust_tpl!(DecodeAny, "rust/decode_any.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, tag_class: &'a str, tag_number: u32, reconstruct_tlv: bool);
+rust_tpl!(DecodeReferenced, "rust/decode_referenced.txt", indent: &'a str, decoder_var: &'a str, name: &'a str, inner_type: &'a str, decode_method: &'a str);
+
+fn render_tpl<T: Template>(t: T) -> String {
+    t.render().expect("template render failed")
+}
 
 pub struct RustRenderer;
 
@@ -51,19 +89,14 @@ impl RustRenderer {
         
         match stmt {
             EncodeStmt::WriteInteger { value, tag, .. } => {
-                Ok(format!(
-                    "{indent}let mut _e = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {indent}_e.write_integer(&{value})?;\n\
-                     {indent}let _encoded = _e.finish();\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(_encoded.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_encoded);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    value = value
-                ))
+                Ok(render_tpl(EncodeInteger {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    value,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteBoolean { value, tag, .. } => {
                 let val_expr = if value.starts_with("self.") {
@@ -73,99 +106,76 @@ impl RustRenderer {
                 } else {
                     value.clone()
                 };
-                Ok(format!(
-                    "{indent}let mut _e = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {indent}_e.write_boolean({val_expr});\n\
-                     {indent}let _encoded = _e.finish();\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(_encoded.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_encoded);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    val_expr = val_expr
-                ))
+                Ok(render_tpl(EncodeBoolean {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    value: &val_expr,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteString { value, tag, .. } => {
-                Ok(format!(
-                    "{indent}let mut _e = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {indent}_e.write_bytes({value}.as_bytes());\n\
-                     {indent}let _encoded = _e.finish();\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(_encoded.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_encoded);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    value = value
-                ))
+                Ok(render_tpl(EncodeString {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    value,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteBytes { value, tag, .. } => {
-                Ok(format!(
-                    "{indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length({value}.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&{value});",
-                    indent = indent,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    value = value
-                ))
+                Ok(render_tpl(EncodeBytes {
+                    indent,
+                    encoder_var,
+                    value,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteBitString { value, tag, .. } => {
-                Ok(format!(
-                    "{indent}let mut _e = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {indent}_e.write_bytes(&[{value}.unused_bits()]);\n\
-                     {indent}_e.write_bytes({value}.data());\n\
-                     {indent}let _encoded = _e.finish();\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(_encoded.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_encoded);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    value = value
-                ))
+                Ok(render_tpl(EncodeBitString {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    value,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteOid { value, tag, .. } => {
-                Ok(format!(
-                    "{indent}let _encoded_oid = {value}.encode()?;\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(_encoded_oid.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_encoded_oid);",
-                    indent = indent,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    value = value
-                ))
+                Ok(render_tpl(EncodeOid {
+                    indent,
+                    encoder_var,
+                    value,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteNull { tag, .. } => {
-                Ok(format!(
-                    "{indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(0)?;",
-                    indent = indent,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number
-                ))
+                Ok(render_tpl(EncodeNull {
+                    indent,
+                    encoder_var,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                }))
             }
             EncodeStmt::WriteAny { value, .. } => {
-                Ok(format!(
-                    "{indent}{encoder_var}.write_bytes(&{value}.content);",
-                    indent = indent,
-                    value = value
-                ))
+                Ok(render_tpl(EncodeAny {
+                    indent,
+                    encoder_var,
+                    value,
+                }))
             }
             EncodeStmt::WriteReferenced { encode_method, value, .. } |
             EncodeStmt::WriteChoice { encode_method, value, .. } => {
-                Ok(format!(
-                    "{indent}let _encoded = {value}.{encode_method}()?;\n\
-                     {indent}{encoder_var}.write_bytes(&_encoded);",
-                    indent = indent,
-                    value = value,
-                    encode_method = encode_method
-                ))
+                Ok(render_tpl(EncodeReferenced {
+                    indent,
+                    encoder_var,
+                    value,
+                    encode_method,
+                }))
             }
             EncodeStmt::WriteList { tag, value, element_info, .. } => {
                 let element_encode = match element_info.encoding.as_str() {
@@ -194,217 +204,134 @@ impl RustRenderer {
                         "{indent}    let _encoded = _li.clone();",
                         indent = indent
                     ),
-                    _ => format!("{indent}    let _encoded = _li.encode_{}()?", prefix.to_lowercase(), indent = indent),
+                    _ => format!("{indent}    let _encoded = _li.encode_{}()?", prefix.to_lowercase()),
                 };
-                Ok(format!(
-                    "{indent}let mut _list_content = Vec::new();\n\
-                     {indent}for _li in {value} {{\n\
-                     {element_encode}\n\
-                     {indent}    let mut _e = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {indent}    _e.write_bytes(&_encoded);\n\
-                     {indent}    _list_content.extend(_e.finish());\n\
-                     {indent}}}\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, true)?;\n\
-                     {indent}{encoder_var}.write_length(_list_content.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_list_content);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&tag.class),
-                    tag_number = tag.number,
-                    value = value,
-                    element_encode = element_encode
-                ))
+                Ok(render_tpl(EncodeList {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    value,
+                    tag_class: &tag_class_to_rust(&tag.class),
+                    tag_number: tag.number,
+                    element_encode,
+                }))
             }
             EncodeStmt::WrapExplicit { outer_tag, inner_stmt } => {
                 let inner_code = self.render_encode_stmt(inner_stmt, "_inner_encoder", "        ", prefix)?;
-                Ok(format!(
-                    "{indent}let mut _inner_encoder = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {inner_code}\n\
-                     {indent}let _inner_bytes = _inner_encoder.finish();\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, true)?;\n\
-                     {indent}{encoder_var}.write_length(_inner_bytes.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_inner_bytes);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&outer_tag.class),
-                    tag_number = outer_tag.number
-                ))
+                Ok(render_tpl(EncodeWrapExplicit {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    outer_tag_class: &tag_class_to_rust(&outer_tag.class),
+                    outer_tag_number: outer_tag.number,
+                    inner_code,
+                }))
             }
             EncodeStmt::WrapImplicit { outer_tag, inner_stmt, .. } => {
                 let inner_code = self.render_encode_stmt(inner_stmt, "_inner_encoder", "        ", prefix)?;
-                Ok(format!(
-                    "{indent}let mut _inner_encoder = asnvil_runtime_rust::{encoder_type}::new();\n\
-                     {inner_code}\n\
-                     {indent}let _inner_bytes = _inner_encoder.finish();\n\
-                     {indent}{encoder_var}.write_tag(asnvil_runtime_rust::TagClass::{tag_class}, {tag_number}, false)?;\n\
-                     {indent}{encoder_var}.write_length(_inner_bytes.len())?;\n\
-                     {indent}{encoder_var}.write_bytes(&_inner_bytes);",
-                    indent = indent,
-                    encoder_type = encoder_type,
-                    tag_class = tag_class_to_rust(&outer_tag.class),
-                    tag_number = outer_tag.number
-                ))
+                Ok(render_tpl(EncodeWrapImplicit {
+                    indent,
+                    encoder_type: &encoder_type,
+                    encoder_var,
+                    outer_tag_class: &tag_class_to_rust(&outer_tag.class),
+                    outer_tag_number: outer_tag.number,
+                    inner_code,
+                }))
             }
-            _ => Ok(format!("{indent}// Unsupported encode stmt: {:?}", stmt, indent = indent)),
+            _ => Ok(format!("{indent}// Unsupported encode stmt: {:?}", stmt)),
         }
     }
 
     fn render_decode_stmt(&self, stmt: &DecodeStmt, decoder_var: &str, indent: &str, ber: Option<&BerFieldInfo>, prefix: &str) -> Result<String> {
-        let decoder_type = format!("{}Decoder", prefix);
         let tag_class = ber.map(|b| self.tag_class_to_rust(&b.tag_class)).unwrap_or_else(|| "Universal".to_string());
         let tag_number = ber.map(|b| b.tag_number).unwrap_or(0);
         
         match stmt {
             DecodeStmt::ReadInteger { name } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}{name} = Some({decoder_var}.read_integer()?);",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeInteger {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadBoolean { name } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}{name} = Some({decoder_var}.read_boolean()?);",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeBoolean {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadString { name, .. } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}let _len = {decoder_var}.read_length()?;\n\
-                     {indent}let {name}_bytes = {decoder_var}.read_bytes(_len)?;\n\
-                     {indent}{name} = Some(String::from_utf8({name}_bytes.to_vec()).map_err(|_| asnvil_runtime_rust::AsnError::InvalidIntegerEncoding)?);",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeString {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadBytes { name } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}let _len = {decoder_var}.read_length()?;\n\
-                     {indent}{name} = Some({decoder_var}.read_bytes(_len)?.to_vec());",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeBytes {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadBitString { name } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}let _len = {decoder_var}.read_length()?;\n\
-                     {indent}let _bs_data = {decoder_var}.read_bytes(_len)?;\n\
-                     {indent}{name} = Some(asnvil_runtime_rust::BitString::new(_bs_data[1..].to_vec(), _bs_data[0])?);",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeBitString {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadOid { name } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}let _oid_len = {decoder_var}.read_length()?;\n\
-                     {indent}let _oid_data = {decoder_var}.read_bytes(_oid_len)?;\n\
-                     {indent}{name} = Some(asnvil_runtime_rust::ObjectIdentifier::decode(_oid_data)?.0);",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeOid {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadNull { name } => {
-                Ok(format!(
-                    "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                     {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                     {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                     {indent}}}\n\
-                     {indent}{decoder_var}.read_length()?;\n\
-                     {indent}{name} = Some(());",
-                    indent = indent,
-                    name = name,
-                    tag_class = tag_class,
-                    tag_number = tag_number,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeNull {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                }))
             }
             DecodeStmt::ReadAny { name, reconstruct_tlv } => {
-                if *reconstruct_tlv {
-                    Ok(format!(
-                        "{indent}let _tag = {decoder_var}.read_tag()?;\n\
-                         {indent}if _tag.0 != asnvil_runtime_rust::TagClass::{tag_class} || _tag.1 != {tag_number} {{\n\
-                         {indent}    return Err(AsnError::UnexpectedTag {{ expected: Tag {{ tag_class: asnvil_runtime_rust::TagClass::{tag_class}, number: {tag_number}, constructed: false }}, actual: Tag {{ tag_class: _tag.0, number: _tag.1, constructed: _tag.2 }} }});\n\
-                         {indent}}}\n\
-                         {indent}let _len = {decoder_var}.read_length()?;\n\
-                         {indent}let _content = {decoder_var}.read_bytes(_len)?.to_vec();\n\
-                         {indent}{name} = Some(asnvil_runtime_rust::AsnAny {{\n\
-                         {indent}    tag_class: _tag.0,\n\
-                         {indent}    number: _tag.1,\n\
-                         {indent}    content: _content,\n\
-                         {indent}}});",
-                        indent = indent,
-                        name = name,
-                        tag_class = tag_class,
-                        tag_number = tag_number,
-                        decoder_var = decoder_var
-                    ))
-                } else {
-                    Ok(format!(
-                        "{indent}{name} = Some(asnvil_runtime_rust::AsnAny {{\n\
-                         {indent}    tag_class: asnvil_runtime_rust::TagClass::Universal,\n\
-                         {indent}    number: 0,\n\
-                         {indent}    content: Vec::new(),\n\
-                         {indent}}});",
-                        indent = indent,
-                        name = name
-                    ))
-                }
+                Ok(render_tpl(DecodeAny {
+                    indent,
+                    decoder_var,
+                    name,
+                    tag_class: &tag_class,
+                    tag_number,
+                    reconstruct_tlv: *reconstruct_tlv,
+                }))
             }
             DecodeStmt::ReadReferenced { name, inner_type, decode_method: _, .. } |
             DecodeStmt::ReadChoice { name, inner_type, decode_method: _, .. } => {
                 let decode_method = if prefix == "Oer" { "decode_oer_from" } else { "decode_der_from" };
-                Ok(format!(
-                    "{indent}{name} = Some({inner_type}::{decode_method}({decoder_var})?);",
-                    indent = indent,
-                    name = name,
-                    inner_type = inner_type,
-                    decoder_var = decoder_var
-                ))
+                Ok(render_tpl(DecodeReferenced {
+                    indent,
+                    decoder_var,
+                    name,
+                    inner_type,
+                    decode_method,
+                }))
             }
-            _ => Ok(format!("{indent}// Unsupported decode stmt: {:?}", stmt, indent = indent)),
+            _ => Ok(format!("{indent}// Unsupported decode stmt: {:?}", stmt)),
         }
     }
 }

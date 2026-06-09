@@ -1,0 +1,1 @@
+{{ indent }}{{ name }} = Some({{ inner_type }}::{{ decode_method }}({{ decoder_var }})?);

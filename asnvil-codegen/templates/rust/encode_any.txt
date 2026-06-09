@@ -1,0 +1,1 @@
+{{ indent }}{{ encoder_var }}.write_bytes(&{{ value }}.content);

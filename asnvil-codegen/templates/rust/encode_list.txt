@@ -1,0 +1,10 @@
+{{ indent }}let mut _list_content = Vec::new();
+{{ indent }}for _li in {{ value }} {
+{{ element_encode }}
+{{ indent }}    let mut _e = asnvil_runtime_rust::{{ encoder_type }}::new();
+{{ indent }}    _e.write_bytes(&_encoded);
+{{ indent }}    _list_content.extend(_e.finish());
+{{ indent }}}
+{{ indent }}{{ encoder_var }}.write_tag(asnvil_runtime_rust::TagClass::{{ tag_class }}, {{ tag_number }}, true)?;
+{{ indent }}{{ encoder_var }}.write_length(_list_content.len())?;
+{{ indent }}{{ encoder_var }}.write_bytes(&_list_content);
