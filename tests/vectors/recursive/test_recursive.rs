@@ -10,17 +10,7 @@ mod generated;
 use generated::{RecursiveSeq, RecursiveSet, RecursiveChoice};
 use num_bigint::BigInt;
 
-fn main() {
-    test_recursive_seq_single();
-    test_recursive_seq_nested();
-    test_recursive_seq_deep();
-    test_recursive_set_single();
-    test_recursive_set_nested();
-    test_recursive_choice_self();
-    test_recursive_choice_leaf();
-    println!("\nAll Recursive integration tests passed!");
-}
-
+#[test]
 fn test_recursive_seq_single() {
     let node = RecursiveSeq {
         value: BigInt::from(42),
@@ -30,9 +20,9 @@ fn test_recursive_seq_single() {
     let decoded = RecursiveSeq::decode_der(&encoded).expect("Failed to decode");
     assert_eq!(decoded.value, BigInt::from(42));
     assert!(decoded.children.is_empty());
-    println!("PASS: test_recursive_seq_single");
 }
 
+#[test]
 fn test_recursive_seq_nested() {
     let child = RecursiveSeq {
         value: BigInt::from(10),
@@ -47,9 +37,9 @@ fn test_recursive_seq_nested() {
     assert_eq!(decoded.value, BigInt::from(20));
     assert_eq!(decoded.children.len(), 1);
     assert_eq!(decoded.children[0].value, BigInt::from(10));
-    println!("PASS: test_recursive_seq_nested");
 }
 
+#[test]
 fn test_recursive_seq_deep() {
     let mut current = RecursiveSeq {
         value: BigInt::from(0),
@@ -65,9 +55,9 @@ fn test_recursive_seq_deep() {
     let decoded = RecursiveSeq::decode_der(&encoded).expect("Failed to decode");
     assert_eq!(decoded.value, BigInt::from(4));
     assert_eq!(decoded.children[0].value, BigInt::from(3));
-    println!("PASS: test_recursive_seq_deep");
 }
 
+#[test]
 fn test_recursive_set_single() {
     let node = RecursiveSet {
         value: BigInt::from(99),
@@ -77,9 +67,9 @@ fn test_recursive_set_single() {
     let decoded = RecursiveSet::decode_der(&encoded).expect("Failed to decode");
     assert_eq!(decoded.value, BigInt::from(99));
     assert!(decoded.children.is_empty());
-    println!("PASS: test_recursive_set_single");
 }
 
+#[test]
 fn test_recursive_set_nested() {
     let child = RecursiveSet {
         value: BigInt::from(5),
@@ -94,9 +84,9 @@ fn test_recursive_set_nested() {
     assert_eq!(decoded.value, BigInt::from(15));
     assert_eq!(decoded.children.len(), 1);
     assert_eq!(decoded.children[0].value, BigInt::from(5));
-    println!("PASS: test_recursive_set_nested");
 }
 
+#[test]
 fn test_recursive_choice_self() {
     let inner = RecursiveChoice::Leaf(BigInt::from(77));
     let outer = RecursiveChoice::Node {
@@ -115,9 +105,9 @@ fn test_recursive_choice_self() {
         }
         _ => panic!("Expected Node"),
     }
-    println!("PASS: test_recursive_choice_self");
 }
 
+#[test]
 fn test_recursive_choice_leaf() {
     let leaf = RecursiveChoice::Leaf(BigInt::from(123));
     let encoded = leaf.encode_der().expect("Failed to encode");
@@ -126,5 +116,4 @@ fn test_recursive_choice_leaf() {
         RecursiveChoice::Leaf(v) => assert_eq!(v, BigInt::from(123)),
         _ => panic!("Expected Leaf"),
     }
-    println!("PASS: test_recursive_choice_leaf");
 }

@@ -88,7 +88,7 @@ def run_rust_tests(test_files: list[Path], output_dir: Path) -> bool:
             env = os.environ.copy()
             env["INTEG_OUTPUT_DIR"] = str(output_dir)
             result = subprocess.run(
-                ["rust-script", str(tmp_test_file)],
+                ["rust-script", "--test", str(tmp_test_file)],
                 cwd=REPO_ROOT,
                 env=env,
                 capture_output=True,

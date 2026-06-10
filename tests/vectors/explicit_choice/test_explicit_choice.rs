@@ -10,12 +10,7 @@ mod generated;
 use generated::{Entity, Person, Department};
 use num_bigint::BigInt;
 
-fn main() {
-    test_entity_person_roundtrip();
-    test_entity_department_roundtrip();
-    println!("All Rust integration tests passed!");
-}
-
+#[test]
 fn test_entity_person_roundtrip() {
     let person = Person {
         name: "Alice".to_string(),
@@ -35,9 +30,9 @@ fn test_entity_person_roundtrip() {
         }
         _ => panic!("Expected Person variant"),
     }
-    println!("PASS: test_entity_person_roundtrip");
 }
 
+#[test]
 fn test_entity_department_roundtrip() {
     let dept = Department {
         deptName: "Engineering".to_string(),
@@ -57,5 +52,4 @@ fn test_entity_department_roundtrip() {
         }
         _ => panic!("Expected Department variant"),
     }
-    println!("PASS: test_entity_department_roundtrip");
 }
