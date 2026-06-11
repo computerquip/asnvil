@@ -29,12 +29,12 @@ ASN.1 source (.asn1)
     ↓
 [Code AST Builder] → Code AST with EncodeStmt/DecodeStmt encoding operations
     ↓
-[Python Renderer] → Target language source (Askama templates + renderer methods)
+[Language Renderer] → Target language source (Askama templates + renderer methods)
     ↓
-[Python Runtime] → BER/DER encode/decode
+[Language Runtime] → BER/DER encode/decode
 ```
 
-**Code AST:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`) and encoding operations (`EncodeStmt`/`DecodeStmt`). Each field knows exactly how to encode and decode itself. `TypeRef`/`BuiltinType` are fully language-agnostic — `PythonRenderer` maps `BuiltinType::Integer` → `"int"`, a future `RustRenderer` would map it → `"i64"`, etc. `EncodingType` is a proper enum (not strings), so encoding dispatch is compile-time safe.
+**Code AST:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`) and encoding operations (`EncodeStmt`/`DecodeStmt`). Each field knows exactly how to encode and decode itself. `TypeRef`/`BuiltinType` are fully language-agnostic — `PythonRenderer` maps `BuiltinType::Integer` → `"int"`, `RustRenderer` maps it → `"num_bigint::BigInt"`. `EncodingType` is a proper enum (not strings), so encoding dispatch is compile-time safe.
 
 ### Crates
 
@@ -76,9 +76,10 @@ Options:
 | asnvil (CLI) | 13 Rust unit tests | ✅ |
 | Python runtime | 55 unit tests | ✅ |
 | Python BER vectors | 82 vector tests | ✅ |
-| Integration | 9 suites, 87 roundtrip tests | ✅ |
+| Rust Integration | 10+ suites, co-located `rust-script` tests | ✅ |
+| Python Integration | 10+ suites, co-located `pytest` tests | ✅ |
 
-**Total: 48 Rust tests + 219 Python tests (267 total)**
+**Total: 48 Rust unit tests + 200+ Python/Rust integration tests**
 
 ### BER Test Vectors
 
@@ -91,10 +92,13 @@ comprehensive test coverage, which helps ensure our BER/DER encoder correctness.
 
 ### Test Architecture
 
-Test vectors are stored in shared YAML files under `tests/vectors/ber/`, organized by
-encoding type (BER, PER, OER). Integration tests are organized by language first, then
-encoding (`tests/integration/python/ber/`). This architecture supports future language
-targets (Rust, TypeScript, C, Go) and encoding targets (PER, OER, XER, JER).
+The test framework is **flat, extension-driven, and co-located**. All test data and scenarios live in `tests/vectors/`.
+- **Parser Tests**: Located in `asnvil-parser/tests/`. They read `.asn1` schemas from `tests/vectors/<feature>/schema.asn1`.
+- **Runtime Tests**: Located in `tests/vectors/runtime_tests/`. Pure language unit tests.
+- **Integration Tests**: Located in `tests/vectors/<feature>/`. Each feature folder contains its `schema.asn1`, `test_*.py` (for Python), and `test_*.rs` (for Rust). 
+- **Test Runner**: `tests/run_integration.py` dynamically discovers these folders, compiles any `.asn1` files found, and executes the corresponding language-specific tests. For Rust, it uses `rust-script --test` to run co-located `#[test]` functions without requiring a separate Cargo workspace.
+
+Test vectors for BER/DER are adapted from the [vlm/asn1c](https://github.com/vlm/asn1c) project (MIT license).
 
 ### Running Tests
 

@@ -19,7 +19,7 @@ tests/
     ├── <feature_name>/          # Example: x509_subset, explicit_choice, ber_primitives
     │   ├── *.asn1               # One or more ASN.1 schemas (e.g., schema.asn1, imports.asn1)
     │   ├── test_*.py            # Python test script(s) for this feature
-    │   ├── test_*.rs            # (Future) Rust test script(s) for this feature
+    │   ├── test_*.rs            # Rust test script(s) for this feature (executed via rust-script --test)
     │   └── *.yaml               # (Optional) Hex/JSON test vectors for this feature
 ```
 
@@ -27,11 +27,11 @@ tests/
 When `python3 tests/run_integration.py` (or `just test-integration`) is executed:
 1. **Discovery**: Iterates through all directories in `tests/vectors/`.
 2. **Validation**: A directory is considered a valid test suite if it contains at least one `test_*.py` or `test_*.rs` file.
-3. **Compilation**: If the directory contains `*.asn1` files, it compiles *all* of them into a temporary output directory using `cargo run -- -o <temp_dir> <schema.asn1>`.
-4. **Runtime Setup**: Copies `asnvil-runtime-python/` into the temporary output directory.
+3. **Compilation**: If the directory contains `*.asn1` files, it compiles *all* of them into a temporary output directory using `cargo run -- -o <temp_dir> --lang <lang> <schema.asn1>`.
+4. **Runtime Setup**: Copies `asnvil-runtime-python/` into the temporary output directory (for Python tests).
 5. **Execution**: 
    - For `.py` files: Sets `PYTHONPATH` and `INTEG_OUTPUT_DIR` environment variables, then runs `pytest`.
-   - For `.rs` files (future): Sets up a temporary Cargo workspace and runs `cargo test`.
+   - For `.rs` files: Copies the generated `.rs` files to a temporary directory alongside the test file, then runs `rust-script --test <test_file.rs>`. This allows standard `#[test]` functions to be used without a separate Cargo workspace.
 
 ## ➕ How to Add New Tests
 
@@ -52,6 +52,14 @@ When `python3 tests/run_integration.py` (or `just test-integration`) is executed
   2. Add `test_*.py`. Import generated modules using the **ASN.1 MODULE IDENTIFIER** (e.g., `from TestModule import Person`), *not* the filename.
   3. (Optional) Add `payloads.yaml` for data-driven hex/byte assertions.
 - **Rule**: The test file name *must* start with `test_` (e.g., `test_roundtrip.py`) for the runner's `glob("test_*.py")` to discover it.
+
+### 4. Rust Integration Tests
+- **Location**: Same folder as the Python tests: `tests/vectors/<feature_name>/test_*.rs`.
+- **Action**: 
+  1. Add a `//! ```cargo` block at the top of the file to specify dependencies (e.g., `asnvil-runtime-rust`, `num-bigint`). Use `__REPO_ROOT__` as a placeholder for the repository root path, which the runner will substitute.
+  2. Use `#[path = "./<GeneratedModule>.rs"] mod generated;` to include the generated code.
+  3. Write standard `#[test]` functions. The runner executes the file using `rust-script --test`, providing full test harness features (individual test reporting, panic backtraces).
+- **Rule**: The test file name *must* start with `test_` (e.g., `test_roundtrip.rs`) for the runner's `glob("test_*.rs")` to discover it.
 
 ## ⚠️ Critical Constraints & Anti-Patterns
 - **NEVER hardcode test paths** in `run_integration.py`. The runner must remain purely extension-driven.

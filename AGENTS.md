@@ -47,7 +47,9 @@ ASN.1 source (.asn1)
 | `asnvil-codegen/src/builder.rs` | IR → Code AST transformation (builds `EncodeStmt`/`DecodeStmt` alongside `BerFieldInfo`) |
 | `asnvil-codegen/src/renderer.rs` | `LanguageRenderer` trait for per-language code generation |
 | `asnvil-codegen/src/python.rs` | Python renderer implementing `LanguageRenderer` |
-| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): 3 thin structural wrappers (`enum.txt`, `type_alias.txt`, `module_header.txt`) + leaf encode/decode templates |
+| `asnvil-codegen/src/rust.rs` | Rust renderer implementing `LanguageRenderer` (uses Askama for statement templates) |
+| `asnvil-codegen/templates/python/` | **Askama** templates (.txt): structural wrappers + leaf encode/decode templates |
+| `asnvil-codegen/templates/rust/` | **Askama** templates (.txt): statement-level encode/decode templates |
 
 ## Critical Parol v4 Integration Notes
 
@@ -217,7 +219,9 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 
 **Key files:**
 - `asnvil-codegen/src/python.rs` — Python renderer with Askama `#[derive(Template)]` structs
+- `asnvil-codegen/src/rust.rs` — Rust renderer with Askama `#[derive(Template)]` structs for statement-level generation
 - `asnvil-codegen/templates/python/` — Askama templates (.txt extension = no escaping)
+- `asnvil-codegen/templates/rust/` — Askama templates (.txt extension = no escaping)
 - `asnvil-codegen/askama.toml` — Askama configuration
 
 **Key patterns:**
@@ -226,6 +230,7 @@ Templates use **Askama** (compile-time, derive-based). See the **`askama`** skil
 - **Never** replace `or`/`and`/`not` → `||`/`&&`/`!` globally — only inside `{% %}` blocks
 - `{% if !x.is_empty() %}` for strings, `{% if field.has_ber %}` for optional structs
 - Sort in Rust before passing to template (Askama doesn't support `|sort(attribute='x')`)
+- **Dispatch logic stays in Rust**: The renderer matches on `EncodeStmt`/`DecodeStmt` and renders specific, simple templates per variant, avoiding massive `{% match %}` blocks inside the templates themselves.
 
 ### Milestone 7+: Backlog
 
@@ -406,23 +411,23 @@ class Person(AsnType):
 
 ### Test Architecture
 
-The test framework is flat, extension-driven, and co-located. All test data and scenarios live in `tests/vectors/`.
+The test framework is **flat, extension-driven, and co-located**. All test data and scenarios live in `tests/vectors/`.
 
 - **Parser Tests**: Located in `asnvil-parser/tests/parser_vectors.rs`. They read `.asn1` schemas from `tests/vectors/<feature>/schema.asn1` and assert on the resulting public AST.
-- **Runtime Tests**: Located in `tests/vectors/runtime_tests/`. Pure Python unit tests for the `asnvil_runtime` package.
-- **Integration Tests**: Located in `tests/vectors/<feature>/`. Each feature folder contains its `schema.asn1` (and optionally `imports.asn1`), `test_*.py` (or `test_*.rs` for future backends), and optional `*.yaml` payload files. 
-- **Test Runner**: `tests/run_integration.py` dynamically discovers these folders, compiles any `.asn1` files found, and executes the corresponding language-specific tests.
+- **Runtime Tests**: Located in `tests/vectors/runtime_tests/`. Pure language unit tests for the runtime packages.
+- **Integration Tests**: Located in `tests/vectors/<feature>/`. Each feature folder contains its `schema.asn1` (and optionally `imports.asn1`), `test_*.py` (for Python), and `test_*.rs` (for Rust). 
+- **Test Runner**: `tests/run_integration.py` dynamically discovers these folders, compiles any `.asn1` files found, and executes the corresponding language-specific tests. For Rust, it uses `rust-script --test` to run co-located `#[test]` functions without requiring a separate Cargo workspace.
 
-See `tests/AGENTS.md` and `tests/README.md` for detailed instructions on adding and running tests.
+See `tests/AGENTS.md` for detailed instructions on adding and running tests.
 
 Test vectors for BER/DER are adapted from the [vlm/asn1c](https://github.com/vlm/asn1c) project (MIT license).
 
 ### Current Test Counts
-- Rust: ~48 tests (8 parser integration + 14 IR + 12 codegen + 13 CLI + others)
+- Rust: ~48 unit tests (parser + IR + codegen + CLI)
 - Python runtime: 55 unit tests
-- Python BER vectors: 111 tests (20 tag + 9 length + 30 integer + 16 structured + 28 error + 7 DER error + 2 non-minimal tag tests)
-- Integration: 10 suites, 96 roundtrip tests (9 X.509 + 9 LDAP + 9 SNMP + 10 explicit choice + 9 inline choice + 5 ANY DEFINED BY + 9 constrained types + 10 any decode + 9 recursive + 8 multi-tag + 10 embedded choice)
-- **Total: 310 tests**
+- Python BER vectors: 111 tests
+- Integration: 10+ suites with co-located `pytest` and `rust-script` tests (X.509, LDAP, SNMP, explicit choice, inline choice, ANY DEFINED BY, constrained types, any decode, recursive, multi-tag, embedded choice, indefinite BER)
+- **Total: 300+ tests**
 
 ### Milestone 10: Constraint Parsing ✅ COMPLETE
 
