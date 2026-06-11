@@ -75,7 +75,7 @@ Options:
 | asnvil-codegen | 12 Rust unit tests | ✅ |
 | asnvil (CLI) | 13 Rust unit tests | ✅ |
 | Python runtime | 55 unit tests | ✅ |
-| Python BER vectors | 82 vector tests | ✅ |
+| BER/DER Test Vectors | 111+ vector tests (validates all language runtimes) | ✅ |
 | Rust Integration | 10+ suites, co-located `rust-script` tests | ✅ |
 | Python Integration | 10+ suites, co-located `pytest` tests | ✅ |
 
