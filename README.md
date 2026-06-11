@@ -36,6 +36,17 @@ ASN.1 source (.asn1)
 
 **Code AST:** The Code AST (`code_ast.rs`) is the language-agnostic representation of generated code. It carries both metadata (`BerFieldInfo`) and encoding operations (`EncodeStmt`/`DecodeStmt`). Each field knows exactly how to encode and decode itself. `TypeRef`/`BuiltinType` are fully language-agnostic — `PythonRenderer` maps `BuiltinType::Integer` → `"int"`, `RustRenderer` maps it → `"num_bigint::BigInt"`. `EncodingType` is a proper enum (not strings), so encoding dispatch is compile-time safe.
 
+## Supported Languages & Encodings
+
+| Language | BER | DER | OER | PER | XER | JER |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Python** | ✅ | ✅ | ❌ | 🚧 | 🚧 | 🚧 |
+| **Rust** | ❌ | ✅ | ✅ | 🚧 | 🚧 | 🚧 |
+
+* ✅ = Fully supported (encode/decode)
+* ❌ = Not currently supported
+* 🚧 = Planned / Backlog
+
 ### Crates
 
 | Crate | What It Does |
